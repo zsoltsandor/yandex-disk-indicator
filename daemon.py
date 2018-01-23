@@ -6,14 +6,9 @@ from pyinotify import ProcessEvent, WatchManager, Notifier, IN_MODIFY, IN_ACCESS
 from subprocess import check_output, CalledProcessError
 from re import findall as reFindall, sub as reSub, search as reSearch, M as reM, S as reS
 from argparse import ArgumentParser
-from gettext import translation
 from logging import basicConfig, getLogger
 from os.path import exists as pathExists, join as pathJoin, relpath as relativePath, expanduser
 from shutil import copy as fileCopy, which
-from datetime import datetime
-from webbrowser import open_new as openNewBrowser
-from signal import signal, SIGTERM
-from sys import exit as sysExit
 
 from tools import *
 

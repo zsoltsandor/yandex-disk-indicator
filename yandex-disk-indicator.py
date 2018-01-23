@@ -31,7 +31,11 @@ from gi.repository import Notify
 require_version('GdkPixbuf', '2.0')
 from gi.repository.GdkPixbuf import Pixbuf
 
+from webbrowser import open_new as openNewBrowser
 from logging import basicConfig, getLogger
+from signal import signal, SIGTERM
+from gettext import translation
+from sys import exit as sysExit
 
 from daemon import *
 

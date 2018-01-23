@@ -4,9 +4,6 @@
 from gi import require_version
 require_version('GLib', '2.0')
 from gi.repository.GLib import timeout_add, source_remove
-require_version('Gtk', '3.0')
-from gi.repository import Gtk
-from subprocess import call
 
 
 class Timer(object):            # Timer for triggering a function periodically
