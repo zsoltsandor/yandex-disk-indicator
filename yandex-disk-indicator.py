@@ -224,7 +224,7 @@ class Indicator(YDDaemon):      # Yandex.Disk appIndicator
 
     def update(self, vals, yddir):  # Update information in menu
       self.folder = yddir
-      # Update status data
+      # Update status data on first run or when status has changed
       if vals['statchg'] or vals['laststatus'] == 'unknown':
         self.status.set_label(_('Status: ') + self.YD_STATUS[vals['status']] +
                               (vals['progress'] if vals['status'] == 'busy'
@@ -232,15 +232,23 @@ class Indicator(YDDaemon):      # Yandex.Disk appIndicator
                                ' '.join((':', vals['error'], shortPath(vals['path']))) if vals['status'] == 'error'
                                else
                                ''))
-      # Update sizes data
+        # Update pseudo-static items on first run or when daemon has stopped or started
+        if 'none' in (vals['status'], vals['laststatus']) or vals['laststatus'] == 'unknown':
+          started = vals['status'] != 'none'
+          self.status.set_sensitive(started)
+          # zero-space UTF symbols are used to detect requered action without need to compare translated strings
+          self.daemon_ss.set_label(('\u2060' + _('Stop Yandex.Disk daemon')) if started else ('\u200B' + _('Start Yandex.Disk daemon')))
+          if self.ID != '':                             # Set daemon identity row in multidaemon mode
+            self.yddir.set_label(self.ID + _('  Folder: ') + (shortPath(yddir) if yddir else '< NOT CONFIGURED >'))
+          self.open_folder.set_sensitive(yddir != '') # Activate Open YDfolder if daemon configured
+      # Update sizes data on first run or when size data has changed
       if vals['szchg'] or vals['laststatus'] == 'unknown':
         self.used.set_label(_('Used: ') + vals['used'] + '/' + vals['total'])
         self.free.set_label(_('Free: ') + vals['free'] + _(', trash: ') + vals['trash'])
-      # Update last synchronized sub-menu when daemon is running
+      # Update last synchronized sub-menu on first run or when last data has changed
       if vals['lastchg'] or vals['laststatus'] == 'unknown':
-        self.lastItems = Gtk.Menu()                  # New Sub-menu:
-        #for widget in self.lastItems.get_children():  # Clear last synchronized sub-menu
-        #  self.lastItems.remove(widget)
+        # Update last synchronized sub-menu
+        self.lastItems = Gtk.Menu()                   # Create new Sub-menu:
         for filePath in vals['lastitems']:            # Create new sub-menu items
           # Create menu label as file path (shorten it down to 50 symbols when path length > 50
           # symbols), with replaced underscore (to disable menu acceleration feature of GTK menu).
@@ -256,19 +264,7 @@ class Indicator(YDDaemon):      # Yandex.Disk appIndicator
         # Switch off last items menu sensitivity if no items in list
         self.last.set_sensitive(len(vals['lastitems']) != 0)
         logger.debug("Sub-menu 'Last synchronized' has " + str(len(vals['lastitems'])) + " items")
-      # Update 'static' elements of menu
-      if 'none' in (vals['status'], vals['laststatus']) or vals['laststatus'] == 'unknown':
-        started = vals['status'] != 'none'
-        self.status.set_sensitive(started)
-        self.daemon_ss.set_label(('\u2060' + _('Stop Yandex.Disk daemon')) if started else ('\u200B' + _('Start Yandex.Disk daemon')))
-        self.last.set_sensitive(started)
-        if self.ID != '':                             # Set daemon identity row in multidaemon mode
-          folder = (yddir.replace('_', '\u02CD') if yddir else '< NOT CONFIGURED >')
-          self.yddir.set_label(self.ID + _('  Folder: ') + folder)
-        if yddir != '':                               # Activate Open YDfolder if daemon configured
-          self.open_folder.set_sensitive(True)
-        else:
-          self.open_folder.set_sensitive(False)
+        
       self.show_all()                                 # Renew menu
 
     def openAbout(self, widget):            # Show About window
@@ -325,6 +321,7 @@ class Indicator(YDDaemon):      # Yandex.Disk appIndicator
 
     def startStopDaemon(self, widget):      # Start/Stop daemon
       action = widget.get_label()[:1]
+      # zero-space UTF symbols are used to detect requered action without need to compare translated strings
       if action == '\u200B':    # Start
         self.daemon.start()
       elif action == '\u2060':  # Stop
