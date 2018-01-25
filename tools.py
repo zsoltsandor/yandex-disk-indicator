@@ -111,25 +111,25 @@ class Watcher(object):                # File changes watcher
   def __init__(self, path, handler, par=None):
     self.path = path
     self.par = par
-    def wHandle():
+    def wHandler():
       st = stat(self.path).st_ctime_ns
       if st != self.mark:
         self.mark = st
         handler(self.par)
       return True
+
     if not pathExists(self.path):
-      logger.info("Watcher was not started: path '"+self.path+"' was not found.")
+      logger.error("Watcher: path '"+self.path+"' was not found.")
     else:
       self.mark = stat(self.path).st_ctime_ns
-      
-    self.timer = Timer(700, wHandle, start=False)  # not started initially
+    self.timer = Timer(700, wHandler, start=False)  # not started initially
     self.status = False
 
-  def start(self):                    # Activate iNotify watching
+  def start(self):                    # Activate watching
     if self.status:
       return
     if not pathExists(self.path):
-      logger.info("Watcher was not started: path '"+self.path+"' was not found.")
+      logger.error("Watcher can't start: path '"+self.path+"' was not found.")
       return
     self.mark = stat(self.path).st_ctime_ns
     self.timer.start()
