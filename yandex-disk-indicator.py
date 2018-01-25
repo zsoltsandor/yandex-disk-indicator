@@ -4,7 +4,8 @@
 appName = 'yandex-disk-indicator'
 appVer = '1.9.15'
 #
-COPYRIGHT = 'Copyright ' + '\u00a9' + ' 2013-2018 Sly_tom_cat'
+from datetime import datetime
+COPYRIGHT = 'Copyright ' + '\u00a9' + ' 2013-' + str(datetime.today().year) + ' Sly_tom_cat'
 #
 LICENSE = """
 This program is free software: you can redistribute it and/or
@@ -186,12 +187,9 @@ class Indicator(YDDaemon):      # Yandex.Disk appIndicator
       self.last.set_submenu(self.lastItems)     # Add submenu (empty at the start)
       self.append(self.last)
       self.append(Gtk.SeparatorMenuItem.new())  # -----separator--------
-      self.daemon_start = Gtk.MenuItem(_('Start Yandex.Disk daemon'))
-      self.daemon_start.connect("activate", self.startDaemon)
-      self.append(self.daemon_start)
-      self.daemon_stop = Gtk.MenuItem(_('Stop Yandex.Disk daemon'))
-      self.daemon_stop.connect("activate", self.stopDaemon)
-      self.append(self.daemon_stop)
+      self.daemon_ss = Gtk.MenuItem('')         # Start/Stop daemon: Label is depends on current daemon status
+      self.daemon_ss.connect("activate", self.startStopDaemon)
+      self.append(self.daemon_ss)
       self.open_folder = Gtk.MenuItem(_('Open Yandex.Disk Folder'))
       self.open_folder.connect("activate", lambda w: self.openPath(w, self.folder))
       self.append(self.open_folder)
@@ -262,8 +260,7 @@ class Indicator(YDDaemon):      # Yandex.Disk appIndicator
       if 'none' in (vals['status'], vals['laststatus']) or vals['laststatus'] == 'unknown':
         started = vals['status'] != 'none'
         self.status.set_sensitive(started)
-        self.daemon_stop.set_sensitive(started)
-        self.daemon_start.set_sensitive(not started)
+        self.daemon_ss.set_label(('\u2060' + _('Stop Yandex.Disk daemon')) if started else ('\u200B' + _('Start Yandex.Disk daemon')))
         self.last.set_sensitive(started)
         if self.ID != '':                             # Set daemon identity row in multidaemon mode
           folder = (yddir.replace('_', '\u02CD') if yddir else '< NOT CONFIGURED >')
@@ -326,11 +323,12 @@ class Indicator(YDDaemon):      # Yandex.Disk appIndicator
     def openInBrowser(self, widget, url):   # Open URL
       openNewBrowser(url)
 
-    def startDaemon(self, widget):          # Start daemon
-      self.daemon.start()
-
-    def stopDaemon(self, widget):           # Stop daemon
-      self.daemon.stop()
+    def startStopDaemon(self, widget):      # Start/Stop daemon
+      action = widget.get_label()[:1]
+      if action == '\u200B':    # Start
+        self.daemon.start()
+      elif action == '\u2060':  # Stop
+        self.daemon.stop()
 
     def openPath(self, widget, path):       # Open path
       logger.info('Opening %s' % path)
