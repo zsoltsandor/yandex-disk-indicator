@@ -2,11 +2,10 @@
 # -*- coding: utf-8 -*-
 
 from os import remove, makedirs, getpid, geteuid, getenv
-from pyinotify import ProcessEvent, WatchManager, Notifier, IN_MODIFY, IN_ACCESS
 from subprocess import check_output, CalledProcessError
 from re import findall as reFindall, sub as reSub, search as reSearch, M as reM, S as reS
 from argparse import ArgumentParser
-from logging import basicConfig, getLogger
+from logging import getLogger
 from os.path import exists as pathExists, join as pathJoin, relpath as relativePath, expanduser
 from shutil import copy as fileCopy, which
 
@@ -273,49 +272,6 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
   ID       - the daemon identity string (empty in single daemon configuration)
   '''
 
-  class Watcher(object):                # File changes watcher
-    '''
-    Watcher class for monitor of changes in the daemon internal log for the fastest
-    reaction on status change.
-    '''
-    def __init__(self, path, handler, par=None):
-      # Watched path
-      self.path = path
-      # Initialize iNotify watcher
-      class _EH(ProcessEvent):           # Event handler class for iNotifier
-        def process_IN_MODIFY(self, event):
-          handler(par)
-      self._watchMngr = WatchManager()   # Create watch manager
-      # Create PyiNotifier
-      self._iNotifier = Notifier(self._watchMngr, _EH(), timeout=0.5)
-      # Timer will call iNotifier handler
-      def iNhandle():                    # iNotify working routine (called by timer)
-        while self._iNotifier.check_events():
-          self._iNotifier.read_events()
-          self._iNotifier.process_events()
-        return True
-      self._timer = Timer(700, iNhandle, start=False)  # not started initially
-      self._status = False
-
-    def start(self):                    # Activate iNotify watching
-      if self._status:
-        return
-      if not pathExists(self.path):
-        logger.info("iNotiy was not started: path '"+self.path+"' was not found.")
-        return
-      self._watch = self._watchMngr.add_watch(self.path, IN_MODIFY|IN_ACCESS, rec=False)
-      self._timer.start()
-      self._status = True
-
-    def stop(self):                     # Stop iNotify watching
-      if not self._status:
-        return
-      # Remove watch
-      self._watchMngr.rm_watch(self._watch[self.path])
-      # Stop timer
-      self._timer.stop()
-      self._status = False
-
   class _DConfig(Config):               # Redefined class for daemon config
 
     def save(self):  # Update daemon config file
@@ -377,11 +333,11 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     # Initialize watching staff
     self._wTimer = Timer(500, self._eventHandler, par=False, start=True)
     self._tCnt = 0
-    self._iNtfyWatcher = self.Watcher(pathJoin(
-                                        self.config['dir'].replace('~', getenv("HOME")), 
-                                        '.sync/cli.log'),
-                                      self._eventHandler, 
-                                      par=True)
+    self._iNtfyWatcher = Watcher(pathJoin(
+                                  self.config['dir'].replace('~', getenv("HOME")), 
+                                  '.sync/cli.log'),
+                                self._eventHandler, 
+                                par=True)
     # Set initial daemon status values
     self.vals = {'status': 'unknown', 'progress': '', 'laststatus': 'unknown', 'statchg': True,
                  'total': '...', 'used': '...', 'free': '...', 'trash': '...', 'szchg': True,
