@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
-from logging import getLogger
-logger = getLogger('')
-
 from gi import require_version
 require_version('GLib', '2.0')
 from gi.repository.GLib import timeout_add, source_remove
+
+from logging import getLogger
+logger = getLogger('')
 
 class Timer(object):            # Timer for triggering a function periodically
   ''' Timer class methods:
@@ -58,7 +57,7 @@ class Timer(object):            # Timer for triggering a function periodically
 
 from pyinotify import ProcessEvent, WatchManager, Notifier, IN_MODIFY, IN_ACCESS
 
-class iWatcher(object):                # File changes watcher
+class _Watcher(object):                # File changes watcher
   '''
   Watcher class for monitor of changes in file.
   '''
