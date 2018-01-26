@@ -103,7 +103,7 @@ class _Watcher(object):                # File changes watcher
 from os import stat
 from os.path import exists as pathExists
 
-class Watcher(object):                # File changes watcher
+class Watcher(object):                # Simple file changes watcher
   '''
   Watcher class for monitor of changes in file.
   '''
