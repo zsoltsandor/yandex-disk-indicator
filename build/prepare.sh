@@ -29,7 +29,10 @@ mkdir -p usr/share/yd-tools/fm-actions/pantheon-files
 mkdir -p usr/share/yd-tools/icons/dark
 mkdir -p usr/share/yd-tools/icons/light
 mkdir -p usr/share/yd-tools/translations
-cp ../../yandex-disk-indicator.py usr/bin/yandex-disk-indicator
+cp ../../yandex-disk-indicator usr/bin/yandex-disk-indicator
+cp ../../yandex-disk-indicator.py usr/share/yd-tools/
+cp ../../daemon.py usr/share/yd-tools/
+cp ../../tools.py usr/share/yd-tools/
 cp ../../ya-setup usr/share/yd-tools/
 cp ../../translations/yandex-disk-indicator_ru.mo usr/share/locale/ru/LC_MESSAGES/yandex-disk-indicator.mo
 cp ../../translations/yandex-disk-indicator_el.mo usr/share/locale/el/LC_MESSAGES/yandex-disk-indicator.mo
