@@ -517,7 +517,7 @@ class Preferences(Gtk.Dialog):  # Preferences window of application and daemons
         deleteFile(autoStartDst)
     elif key == 'fmextensions':
       if not button.get_inconsistent():         # It is a first call
-        if not activateActions(toggleState):               # When activation/deactivation is not success:
+        if not activateActions(toggleState, installDir):               # When activation/deactivation is not success:
           toggleState = not toggleState         # revert settings back
           button.set_inconsistent(True)         # set inconsistent state to detect second call
           button.set_active(toggleState)        # set check-button to reverted status
@@ -623,7 +623,7 @@ if __name__ == '__main__':
         logger.error('Can\'t activate indicator automatic start on system start-up')
 
     # Activate FM actions according to config (as it is first run)
-    activateActions(config['fmextensions'])
+    activateActions(config['fmextensions'], installDir)
     # Default settings should be saved (later)
     config.changed = True
 

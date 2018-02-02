@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from os import remove, makedirs, getpid, geteuid, getenv
-from subprocess import check_output, CalledProcessError
+from subprocess import check_output, CalledProcessError, call
 from re import findall as reFindall, sub as reSub, search as reSearch, M as reM, S as reS
 from argparse import ArgumentParser
 from logging import getLogger
@@ -487,7 +487,8 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
       self.stop()
       logger.info('Demon %sstopped' % self.ID)
 
-def activateActions(activate):  # Install/deinstall file extensions
+def activateActions(activate, installDir):  # Install/deinstall file extensions
+  userHome = getenv("HOME")
   result = False
   try:                  # Catch all exceptions during FM action activation/deactivation
 
