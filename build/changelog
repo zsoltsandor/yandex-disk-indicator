@@ -1,7 +1,6 @@
 yd-tools (@version) @series; urgency=medium
   * Changes:
-    - Fix desktop notifications logic
-    - Notification and Watcher classes optimization
-    - auto-year in copyright string
+    - Fix for github issue #185
+    - Fix for github issue #186
 
  -- Sly_tom_cat <slytomcat@mail.ru>  @date

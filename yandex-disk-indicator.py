@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #
 appName = 'yandex-disk-indicator'
-appVer = '1.9.16'
+appVer = '1.9.18'
 #
 from datetime import datetime
 COPYRIGHT = 'Copyright ' + '\u00a9' + ' 2013-' + str(datetime.today().year) + ' Sly_tom_cat'
@@ -52,8 +52,10 @@ class Notification(object):     # On-screen notification
     global logo
     logger.debug('Message: %s | %s' % (self.title, messg))
     if self.note is not None:
-      # if self.note.props.closed_reason = -1:
-      self.note.close()
+      try:
+        self.note.close()
+      except:
+        pass
       self.note = None
     try:                            # Create notification
       self.note = Notify.Notification.new(self.title, messg)
@@ -515,8 +517,7 @@ class Preferences(Gtk.Dialog):  # Preferences window of application and daemons
         deleteFile(autoStartDst)
     elif key == 'fmextensions':
       if not button.get_inconsistent():         # It is a first call
-        if not activateActions(toggleState):    # When activation/deactivation is not success:
-          notify.send(_('ERROR in setting up of file manager extensions'))
+        if not activateActions(toggleState):               # When activation/deactivation is not success:
           toggleState = not toggleState         # revert settings back
           button.set_inconsistent(True)         # set inconsistent state to detect second call
           button.set_active(toggleState)        # set check-button to reverted status
@@ -531,7 +532,6 @@ def appExit(msg=None):          # Exit from application (it closes all indicator
   for i in indicators:
     i.exit()
   sysExit(msg)
-
 
 ###################### MAIN #########################
 if __name__ == '__main__':
@@ -623,7 +623,7 @@ if __name__ == '__main__':
         logger.error('Can\'t activate indicator automatic start on system start-up')
 
     # Activate FM actions according to config (as it is first run)
-    activateActions()
+    activateActions(config['fmextensions'])
     # Default settings should be saved (later)
     config.changed = True
 
