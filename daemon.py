@@ -8,6 +8,7 @@ from argparse import ArgumentParser
 from logging import getLogger
 from os.path import exists as pathExists, join as pathJoin, relpath as relativePath, expanduser
 from shutil import copy as fileCopy, which
+from sys import exit as sysExit
 
 from tools import *
 
@@ -285,7 +286,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
       fileConfig['stoponexitfromindicator'] = self.get('stoponexitfromindicator', False)
       exList = self.get('exclude-dirs', None)
       fileConfig['exclude-dirs'] = (None if exList is None else
-                                    ', '.join([v  for v in CVal(exList)]))
+                                    ', '.join([v for v in CVal(exList)]))
       # Store changed values
       fileConfig.save()
       self.changed = False
