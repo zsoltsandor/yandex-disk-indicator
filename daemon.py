@@ -307,7 +307,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
       else:
         return False
 
-  def __init__(self, cfgFile, ID, errorDialog):      # Check that daemon installed and configured
+  def __init__(self, cfgFile, ID):      # Check that daemon installed and configured
     '''
     cfgFile  - full path to config file
     ID       - identity string '#<n> ' in multi-instance environment or
@@ -322,7 +322,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     while not (self.config.load() and
                pathExists(self.config.get('dir', '')) and
                pathExists(self.config.get('auth', ''))):
-      if errorDialog(cfgFile) != 0:
+      if self.errorDialog(cfgFile) != 0:
         if ID != '':
           self.config['dir'] = ''
           break   # Exit from loop in multi-instance configuration
@@ -347,7 +347,11 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
       self.start()                      # Start daemon if it is required
     else:
       self._iNtfyWatcher.start()        # try to activate file watcher
-    
+
+  def errorDialog(self, _):
+    # it is virtual method
+    return 0
+
   def _eventHandler(self, iNtf):        # Daemon event handler
     '''
     Handle iNotify and and Timer based events.

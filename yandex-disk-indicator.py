@@ -66,7 +66,6 @@ class Notification(object):     # On-screen notification
 class Indicator(YDDaemon):      # Yandex.Disk appIndicator
 
   def __init__(self, path, ID):
-    indicatorName = "yandex-disk-%s" % ID[1: -1]
     # Create indicator notification engine
     self.notify = Notification(_('Yandex.Disk ') + ID)
     # Setup icons theme
@@ -74,13 +73,15 @@ class Indicator(YDDaemon):      # Yandex.Disk appIndicator
     # Create timer object for icon animation support (don't start it here)
     self.timer = Timer(777, self._iconAnimation, start=False)
     # Create App Indicator
-    self.ind = appIndicator.Indicator.new(indicatorName, self.icon['paused'],
-                                          appIndicator.IndicatorCategory.APPLICATION_STATUS)
+    self.ind = appIndicator.Indicator.new(
+      "yandex-disk-%s" % ID[1: -1],
+      self.icon['paused'],
+      appIndicator.IndicatorCategory.APPLICATION_STATUS)
     self.ind.set_status(appIndicator.IndicatorStatus.ACTIVE)
     self.menu = self.Menu(self, ID)               # Create menu for daemon
     self.ind.set_menu(self.menu)                  # Attach menu to indicator
     # Initialize Yandex.Disk daemon connection object
-    super(Indicator, self).__init__(path, ID, self.errorDialog)
+    super(Indicator, self).__init__(path, ID)
 
   def errorDialog(self, configPath):          # Show error messages according to the daemon error
       dialog = Gtk.MessageDialog(None, 0, Gtk.MessageType.INFO, Gtk.ButtonsType.OK_CANCEL,
