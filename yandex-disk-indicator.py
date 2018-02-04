@@ -248,7 +248,7 @@ class Indicator(YDDaemon):      # Yandex.Disk appIndicator
     if status == 'busy':                # Just entered into 'busy' status
       self._seqNum = 2                  # Next busy icon number for animation
       self.iconTimer.start()                # Start animation timer
-    elif self.timer.active:
+    else:
       self.iconTimer.stop()                 # Stop animation timer when status is not busy
 
   def _iconAnimation(self):         # Changes busy icon by loop (triggered by self.timer)
