@@ -31,13 +31,18 @@ require_version('Notify', '0.7')
 from gi.repository import Notify
 require_version('GdkPixbuf', '2.0')
 from gi.repository.GdkPixbuf import Pixbuf
+require_version('GLib', '2.0')
+from gi.repository.GLib import timeout_add, source_remove
 
 from webbrowser import open_new as openNewBrowser
 from logging import basicConfig, getLogger
 from signal import signal, SIGTERM
 from gettext import translation
+from os import stat
+from os.path import exists as pathExists
 
-from daemon import *
+from daemon import YDDaemon
+from tools import *
 
 class Notification(object):     # On-screen notification
 
@@ -65,13 +70,98 @@ class Notification(object):     # On-screen notification
 
 class Indicator(YDDaemon):      # Yandex.Disk appIndicator
 
+  class Timer(object):            # Timer implementation
+    ''' Timer class methods:
+          __init__ - initialize the timer object with specified interval and handler. Start it
+                    if start value is not False. par - is parameter for handler call.
+          start    - Start timer. Optionally the new interval can be specified and if timer is
+                    already running then the interval is updated (timer restarted with new interval).
+          update   - Updates interval. If timer is running it is restarted with new interval. If it
+                    is not running - then new interval is just stored.
+          stop     - Stop running timer or do nothing if it is not running.
+        Interface variables:
+          active   - True when timer is currently running, otherwise - False
+    '''
+    def __init__(self, interval, handler, par=None, start=True):
+      self.interval = interval          # Timer interval (ms)
+      self.handler = handler            # Handler function
+      self.par = par                    # Parameter of handler function
+      self.active = False               # Current activity status
+      if start:
+        self.start()                    # Start timer if required
+
+    def start(self, interval=None):   # Start inactive timer or update if it is active
+      if interval is None:
+        interval = self.interval
+      if not self.active:
+        self.interval = interval
+        if self.par is None:
+          self.timer = timeout_add(interval, self.handler)
+        else:
+          self.timer = timeout_add(interval, self.handler, self.par)
+        self.active = True
+        # logger.debug('timer started %s %s' %(self.timer, interval))
+      else:
+        self.update(interval)
+
+    def update(self, interval):         # Update interval (restart active, not start if inactive)
+      if interval != self.interval:
+        self.interval = interval
+        if self.active:
+          self.stop()
+          self.start()
+
+    def stop(self):                     # Stop active timer
+      if self.active:
+        # logger.debug('timer to stop %s' %(self.timer))
+        source_remove(self.timer)
+        self.active = False
+
+  class Watcher(object):        # File changes watcher implementation
+    '''
+    Watcher class for monitor of changes in file.
+    '''
+    def __init__(self, path, timerClass, handler, par=None):
+      self.path = path
+      self.par = par
+      def wHandler():
+        st = stat(self.path).st_ctime_ns
+        if st != self.mark:
+          self.mark = st
+          handler(self.par)
+        return True
+
+      if not pathExists(self.path):
+        logger.error("Watcher: path '"+self.path+"' was not found.")
+      else:
+        self.mark = stat(self.path).st_ctime_ns
+      self.timer = timerClass(700, wHandler, start=False)  # not started initially
+      self.status = False
+
+    def start(self):                    # Activate watching
+      if self.status:
+        return
+      if not pathExists(self.path):
+        logger.error("Watcher can't start: path '"+self.path+"' was not found.")
+        return
+      self.mark = stat(self.path).st_ctime_ns
+      self.timer.start()
+      self.status = True
+
+    def stop(self):                     # Stop watching
+      if not self.status:
+        return
+      # Stop timer
+      self.timer.stop()
+      self.status = False
+
   def __init__(self, path, ID):
     # Create indicator notification engine
     self.notify = Notification(_('Yandex.Disk ') + ID)
     # Setup icons theme
     self.setIconTheme(config['theme'])
     # Create timer object for icon animation support (don't start it here)
-    self.timer = Timer(777, self._iconAnimation, start=False)
+    self.iconTimer = self.Timer(777, self._iconAnimation, start=False)
     # Create App Indicator
     self.ind = appIndicator.Indicator.new(
       "yandex-disk-%s" % ID[1: -1],
@@ -157,9 +247,9 @@ class Indicator(YDDaemon):      # Yandex.Disk appIndicator
     # Handle animation
     if status == 'busy':                # Just entered into 'busy' status
       self._seqNum = 2                  # Next busy icon number for animation
-      self.timer.start()                # Start animation timer
+      self.iconTimer.start()                # Start animation timer
     elif self.timer.active:
-      self.timer.stop()                 # Stop animation timer when status is not busy
+      self.iconTimer.stop()                 # Stop animation timer when status is not busy
 
   def _iconAnimation(self):         # Changes busy icon by loop (triggered by self.timer)
     # Set next animation icon
