@@ -348,9 +348,9 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     else:
       self._iNtfyWatcher.start()        # try to activate file watcher
 
-  def errorDialog(self, _):
-    # it is virtual method
-    return 0
+  def errorDialog(self, err):           # Show error messages according to the error
+    # it is virtual method 
+    return 0 
 
   def _eventHandler(self, iNtf):        # Daemon event handler
     '''
