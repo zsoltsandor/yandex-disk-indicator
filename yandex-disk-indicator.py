@@ -187,7 +187,7 @@ class Indicator(YDDaemon):            # Yandex.Disk appIndicator
     # Handle daemon status change by icon change
     if vals['status'] != vals['laststatus']:
       logger.info('Status: ' + vals['laststatus'] + ' -> ' + vals['status'])
-      self.updateIcon(vals['status'])     # Update icon
+      self.updateIcon(vals['status'])          # Update icon
       # Create notifications for status change events
       if config['notifications']:
         if vals['laststatus'] == 'none':       # Daemon has been started
@@ -213,7 +213,7 @@ class Indicator(YDDaemon):            # Yandex.Disk appIndicator
     # Setup icons theme
     self.setIconTheme(config['theme'])
     # Create timer object for icon animation support (don't start it here)
-    self.iconTimer = self.Timer(777, self._iconAnimation, start=False)
+    self.iconTimer = self.Timer(777, self.__iconAnimation, start=False)
     # Create App Indicator
     self.ind = appIndicator.Indicator.new(
       "yandex-disk-%s" % ID[1: -1],
@@ -253,7 +253,7 @@ class Indicator(YDDaemon):            # Yandex.Disk appIndicator
     else:
       self.iconTimer.stop()                 # Stop animation timer when status is not busy
 
-  def _iconAnimation(self):           # Changes busy icon by loop (triggered by self.timer)
+  def __iconAnimation(self):          # Changes busy icon by loop (triggered by self.timer)
     # Set next animation icon
     self.ind.set_icon(pathJoin(self.themePath, 'yd-busy' + str(self._seqNum) + '.png'))
     # Calculate next icon number

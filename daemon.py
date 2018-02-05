@@ -20,11 +20,12 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
   exit     - Handles 'Stop on exit' facility according to daemon configuration settings.
   change   - Call-back function for handling daemon status changes outside the class.
              It have to be redefined by UI class.
-             The parameters of the call - status values dictionary (see vars description below)
+             The parameters of the call - status values dictionary (see __v description below)
 
   Class interface variables:
+  ID       - the daemon identity string (empty in single daemon configuration)
   config   - The daemon configuration dictionary (object of _DConfig(Config) class)
-  vars     - status values dictionary with following keys:
+  __v      - private status values dictionary with following keys:
               'status' - current daemon status
               'progress' - synchronization progress or ''
               'laststatus' - previous daemon status
@@ -38,7 +39,6 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
               'lastchg' - True indicates that lastitems was changed
               'error' - error message
               'path' - path of error
-  ID       - the daemon identity string (empty in single daemon configuration)
   '''
   #################### Virtual classes/methods ##################
   # they have to be implemented in GUI part of code
@@ -84,7 +84,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     # it is virtual method 
     return 0 
 
-  def change(self, vals):               # Redefined update handler
+  def change(self, vals):               # Update handler
     logger.debug('Update event: %s \nValues : %s' % (str(update), str(vals)))
 
   #################### Own classes/methods ####################
@@ -133,7 +133,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
       sysExit(_('Yandex.Disk utility is not installed.\n ' +
             'Visit www.yandex.ru, download and install Yandex.Disk daemon.'))
     # Try to read Yandex.Disk configuration file and make sure that it is correctly configured
-    self.config = self._DConfig(cfgFile, load=False)
+    self.config = self.__DConfig(cfgFile, load=False)
     while not (self.config.load() and
                pathExists(self.config.get('dir', '')) and
                pathExists(self.config.get('auth', ''))):
@@ -149,20 +149,20 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     # Initialize watching staff
     self.__watchTimer = self.Timer(500, self.__eventHandler, par=False, start=True)
     self.__cnt = 0
-    self.__watcher = self.__watcher(pathJoin(
+    self.__watcher = self.Watcher(pathJoin(
                           self.config['dir'].replace('~', getenv("HOME")), 
                           '.sync/cli.log'),
                           self.Timer,
                           self.__eventHandler, 
                           par=True)
     # Set initial daemon status values
-    self.vals = {'status': 'unknown', 'progress': '', 'laststatus': 'unknown', 'statchg': True,
+    self.__v = {'status': 'unknown', 'progress': '', 'laststatus': 'unknown', 'statchg': True,
                  'total': '...', 'used': '...', 'free': '...', 'trash': '...', 'szchg': True,
                  'error':'', 'path':'', 'lastitems': [], 'lastchg': True}
     if self.config.get('startonstartofindicator', True):
-      self.start()                      # Start daemon if it is required
+      self.start()                       # Start daemon if it is required
     else:
-      self.__watcher.start()        # try to activate file watcher
+      self.__watcher.start()             # try to activate file watcher
 
   def __eventHandler(self, watch):       # Daemon event handler
     '''
@@ -175,13 +175,13 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     # Parse fresh daemon output. Parsing returns true when something changed
     if self.__parseOutput(self.getOutput()):
       logger.debug(self.ID + 'Event raised by' + (' Watcher' if watch else ' Timer'))
-      self.change(self.vals)                  # Raise outside update event
+      self.change(self.__v)                   # Raise outside update event
     # --- Handle timer delays ---
     if watch:                                 # True means that it is called by watcher
       self.__watchTimer.update(2000)                 # Set timer interval to 2 sec.
       self.__cnt = 0                          # Reset counter as it was triggered not by timer
     else:                                     # It called by timer
-      if self.vals['status'] != 'busy':       # In 'busy' keep update interval (2 sec.)
+      if self.__v['status'] != 'busy':        # In 'busy' keep update interval (2 sec.)
         if self.__cnt < 9:                    # Increase interval up to 10 sec (2 + 8)
           self.__watchTimer.update((2 + self.__cnt) * 1000)
           self.__cnt += 1                     # Increase counter to increase delay next activation.
@@ -201,8 +201,8 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
   def __parseOutput(self, out):         # Parse the daemon output
     '''
     It parses the daemon output and check that something changed from last daemon status.
-    The self.vals dictionary is updated with new daemon statuses and self.update set represents
-    the changes in self.vals. It returns True is something changed
+    The self.__v dictionary is updated with new daemon statuses and self.update set represents
+    the changes in self.__v. It returns True is something changed
 
     Daemon status is converted form daemon raw statuses into internal representation.
     Internal status can be on of the following: 'busy', 'idle', 'paused', 'none', 'no_net', 'error'.
@@ -213,9 +213,9 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
      - 'no internet access' converted to 'no_net'
      - 'error' covers all other errors, except 'no internet access'
     '''
-    self.vals['statchg'] = False
-    self.vals['szchg'] = False
-    self.vals['lastchg'] = False
+    self.__v['statchg'] = False
+    self.__v['szchg'] = False
+    self.__v['lastchg'] = False
     # Split output on two parts: list of named values and file list
     output = out.split('Last synchronized items:')
     if len(output) == 2:
@@ -231,14 +231,14 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
                       ('Trash size', 'trash'), ('Error', 'error'), ('Path', 'path')):
       val = res.get(srch, '')
       if key == 'status':                     # Convert status to internal representation
-        # logger.debug('Raw status: \'%s\', previous status: %s'%(val, self.vals['status']))
+        # logger.debug('Raw status: \'%s\', previous status: %s'%(val, self.__v['status']))
         # Store previous status
-        self.vals['laststatus'] = self.vals['status']
+        self.__v['laststatus'] = self.__v['status']
         # Convert daemon raw status to internal representation
         val = ('none' if val == '' else
                # Ignore index status
-               'busy' if val == 'index' and self.vals['laststatus'] == "unknown" else
-               self.vals['laststatus'] if val == 'index' and self.vals['laststatus'] != "unknown" else
+               'busy' if val == 'index' and self.__v['laststatus'] == "unknown" else
+               self.__v['laststatus'] if val == 'index' and self.__v['laststatus'] != "unknown" else
                # Rename long error status
                'no_net' if val == 'no internet access' else
                # pass 'busy', 'idle' and 'paused' statuses 'as is'
@@ -248,22 +248,22 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
       elif key != 'progress' and val == '':   # 'progress' can be '' the rest - can't
         val = '...'                           # Make default filling for empty values
       # Check value change and store changed
-      if self.vals[key] != val:               # Check change of value
-        self.vals[key] = val                  # Store new value
+      if self.__v[key] != val:                # Check change of value
+        self.__v[key] = val                   # Store new value
         if key == 'status':
-          self.vals['statchg'] = True         # Remember that status changed
+          self.__v['statchg'] = True          # Remember that status changed
         elif key == 'progress':
-          self.vals['statchg'] = True         # Remember that progress changed
+          self.__v['statchg'] = True          # Remember that progress changed
         else:
-          self.vals['szchg'] = True           # Remember that something changed in sizes values
+          self.__v['szchg'] = True            # Remember that something changed in sizes values
     # Parse last synchronized items
     buf = reFindall(r".*: '(.*)'\n", files)
     # Check if file list has been changed
-    if self.vals['lastitems'] != buf:
-      self.vals['lastitems'] = buf            # Store the new file list
-      self.vals['lastchg'] = True             # Remember that it is changed
+    if self.__v['lastitems'] != buf:
+      self.__v['lastitems'] = buf             # Store the new file list
+      self.__v['lastchg'] = True              # Remember that it is changed
     # return True when something changed, if nothing changed - return False
-    return self.vals['statchg'] or self.vals['szchg'] or self.vals['lastchg']
+    return self.__v['statchg'] or self.__v['szchg'] or self.__v['lastchg']
 
   def start(self):                      # Execute 'yandex-disk start'
     '''
@@ -297,6 +297,6 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
   def exit(self):                       # Handle daemon/indicator closing
     self.__watcher.stop()
     # Stop yandex-disk daemon if it is required by its configuration
-    if self.vals['status'] != 'none' and self.config.get('stoponexitfromindicator', False):
+    if self.__v['status'] != 'none' and self.config.get('stoponexitfromindicator', False):
       self.stop()
       logger.info('Demon %sstopped' % self.ID)
