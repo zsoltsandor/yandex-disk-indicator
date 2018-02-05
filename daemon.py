@@ -6,7 +6,6 @@ from tools import *
 from logging import getLogger
 logger = getLogger('')
 
-
 #################### Main daemon/indicator classes ####################
 class YDDaemon(object):         # Yandex.Disk daemon interface
   '''
@@ -59,7 +58,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     def __init__(self, interval, handler, par=None, start=True):
       pass
 
-    def start(self, interval=None):   # Start inactive timer or update if it is active
+    def start(self, interval=None):     # Start inactive timer or update if it is active
       pass
 
     def update(self, interval):         # Update interval (restart active, not start if inactive)
@@ -89,7 +88,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     logger.debug('Update event: %s \nValues : %s' % (str(update), str(vals)))
 
   #################### Own classes/methods ####################
-  class _DConfig(Config):               # Redefined class for daemon config
+  class __DConfig(Config):              # Redefined class for daemon config
 
     def save(self):  # Update daemon config file
       # Make a new Config object
@@ -129,8 +128,8 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     ID       - identity string '#<n> ' in multi-instance environment or
                '' in single instance environment'''
     self.ID = ID                                      # Remember daemon identity
-    self.YDC = which('yandex-disk')
-    if self.YDC is None:
+    self.__YDC = which('yandex-disk')
+    if self.__YDC is None:
       sysExit(_('Yandex.Disk utility is not installed.\n ' +
             'Visit www.yandex.ru, download and install Yandex.Disk daemon.'))
     # Try to read Yandex.Disk configuration file and make sure that it is correctly configured
@@ -148,13 +147,13 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     if self.tmpDir is None:
         self.tmpDir = '/tmp'
     # Initialize watching staff
-    self.timer = self.Timer(500, self._eventHandler, par=False, start=True)
-    self.cnt = 0
-    self.watcher = self.Watcher(pathJoin(
+    self.__watchTimer = self.Timer(500, self.__eventHandler, par=False, start=True)
+    self.__cnt = 0
+    self.__watcher = self.__watcher(pathJoin(
                           self.config['dir'].replace('~', getenv("HOME")), 
                           '.sync/cli.log'),
                           self.Timer,
-                          self._eventHandler, 
+                          self.__eventHandler, 
                           par=True)
     # Set initial daemon status values
     self.vals = {'status': 'unknown', 'progress': '', 'laststatus': 'unknown', 'statchg': True,
@@ -163,9 +162,9 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     if self.config.get('startonstartofindicator', True):
       self.start()                      # Start daemon if it is required
     else:
-      self.watcher.start()        # try to activate file watcher
+      self.__watcher.start()        # try to activate file watcher
 
-  def _eventHandler(self, watch):       # Daemon event handler
+  def __eventHandler(self, watch):       # Daemon event handler
     '''
     Handle watcher and and timer based events.
     After receiving and parsing the daemon output it raises outside change event if daemon changes
@@ -174,22 +173,22 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     '''
 
     # Parse fresh daemon output. Parsing returns true when something changed
-    if self._parseOutput(self.getOutput()):
-      logger.debug(self.ID + 'Event raised by' + ('Watcher ' if watch else 'Timer '))
+    if self.__parseOutput(self.getOutput()):
+      logger.debug(self.ID + 'Event raised by' + (' Watcher' if watch else ' Timer'))
       self.change(self.vals)                  # Raise outside update event
     # --- Handle timer delays ---
     if watch:                                 # True means that it is called by watcher
-      self.timer.update(2000)                 # Set timer interval to 2 sec.
-      self.cnt = 0                            # Reset counter as it was triggered not by timer
+      self.__watchTimer.update(2000)                 # Set timer interval to 2 sec.
+      self.__cnt = 0                          # Reset counter as it was triggered not by timer
     else:                                     # It called by timer
       if self.vals['status'] != 'busy':       # In 'busy' keep update interval (2 sec.)
-        if self.cnt < 9:                      # Increase interval up to 10 sec (2 + 8)
-          self.timer.update((2 + self.cnt) * 1000)
-          self.cnt += 1                       # Increase counter to increase delay next activation.
+        if self.__cnt < 9:                    # Increase interval up to 10 sec (2 + 8)
+          self.__watchTimer.update((2 + self.__cnt) * 1000)
+          self.__cnt += 1                     # Increase counter to increase delay next activation.
     return True                               # True is required to continue activations by timer.
 
   def getOutput(self, userLang=False):  # Get result of 'yandex-disk status'
-    cmd = [self.YDC, '-c', self.config.fileName, 'status']
+    cmd = [self.__YDC, '-c', self.config.fileName, 'status']
     if not userLang:      # Change locale settings when it required
       cmd = ['env', '-i', "LANG='en_US.UTF8'", "TMPDIR=%s"%self.tmpDir] + cmd
     try:
@@ -199,7 +198,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     # logger.debug('output = %s' % output)
     return output
 
-  def _parseOutput(self, out):          # Parse the daemon output
+  def __parseOutput(self, out):         # Parse the daemon output
     '''
     It parses the daemon output and check that something changed from last daemon status.
     The self.vals dictionary is updated with new daemon statuses and self.update set represents
@@ -274,29 +273,29 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     '''
     if self.getOutput() != "":
       logger.info('Daemon is already started')
-      self.watcher.start()    # Activate iNotify watcher
+      self.__watcher.start()    # Activate file watcher
       return
-    try:                                          # Try to start
-      msg = check_output([self.YDC, '-c', self.config.fileName, 'start'], universal_newlines=True)
+    try:                        # Try to start
+      msg = check_output([self.__YDC, '-c', self.config.fileName, 'start'], universal_newlines=True)
       logger.info('Start success, message: %s' % msg)
     except CalledProcessError as e:
       logger.error('Daemon start failed:%s' % e.output)
       return
-    self.watcher.start()    # Activate iNotify watcher
+    self.__watcher.start()      # Activate file watcher
 
   def stop(self):                       # Execute 'yandex-disk stop'
     if self.getOutput() == "":
       logger.info('Daemon is not started')
       return
     try:
-      msg = check_output([self.YDC, '-c', self.config.fileName, 'stop'],
+      msg = check_output([self.__YDC, '-c', self.config.fileName, 'stop'],
                          universal_newlines=True)
       logger.info('Start success, message: %s' % msg)
     except:
       logger.info('Start failed')
 
   def exit(self):                       # Handle daemon/indicator closing
-    self.watcher.stop()
+    self.__watcher.stop()
     # Stop yandex-disk daemon if it is required by its configuration
     if self.vals['status'] != 'none' and self.config.get('stoponexitfromindicator', False):
       self.stop()

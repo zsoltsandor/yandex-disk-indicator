@@ -44,7 +44,7 @@ from os.path import exists as pathExists
 from daemon import YDDaemon
 from tools import *
 
-class Notification(object):     # On-screen notification
+class Notification(object):           # On-screen notification
 
   def __init__(self, title):    # Initialize notification engine
     if not Notify.is_initted():
@@ -68,9 +68,10 @@ class Notification(object):     # On-screen notification
     except:
       logger.error('Message engine failure')
 
-class Indicator(YDDaemon):      # Yandex.Disk appIndicator
+class Indicator(YDDaemon):            # Yandex.Disk appIndicator
 
-  class Timer(object):            # Timer implementation
+  ####### YDDaemon virtual classes/methods implementations
+  class Timer(object):                # Timer implementation
     ''' Timer class methods:
           __init__ - initialize the timer object with specified interval and handler. Start it
                     if start value is not False. par - is parameter for handler call.
@@ -117,7 +118,7 @@ class Indicator(YDDaemon):      # Yandex.Disk appIndicator
         source_remove(self.timer)
         self.active = False
 
-  class Watcher(object):        # File changes watcher implementation
+  class Watcher(object):              # File changes watcher implementation
     '''
     Watcher class for monitor of changes in file.
     '''
@@ -155,25 +156,7 @@ class Indicator(YDDaemon):      # Yandex.Disk appIndicator
       self.timer.stop()
       self.status = False
 
-  def __init__(self, path, ID):
-    # Create indicator notification engine
-    self.notify = Notification(_('Yandex.Disk ') + ID)
-    # Setup icons theme
-    self.setIconTheme(config['theme'])
-    # Create timer object for icon animation support (don't start it here)
-    self.iconTimer = self.Timer(777, self._iconAnimation, start=False)
-    # Create App Indicator
-    self.ind = appIndicator.Indicator.new(
-      "yandex-disk-%s" % ID[1: -1],
-      self.icon['paused'],
-      appIndicator.IndicatorCategory.APPLICATION_STATUS)
-    self.ind.set_status(appIndicator.IndicatorStatus.ACTIVE)
-    self.menu = self.Menu(self, ID)               # Create menu for daemon
-    self.ind.set_menu(self.menu)                  # Attach menu to indicator
-    # Initialize Yandex.Disk daemon connection object
-    super(Indicator, self).__init__(path, ID)
-
-  def errorDialog(self, configPath):          # Show error messages according to the daemon error
+  def errorDialog(self, configPath):  # Show error messages implementation
       dialog = Gtk.MessageDialog(None, 0, Gtk.MessageType.INFO, Gtk.ButtonsType.OK_CANCEL,
                                   _('Yandex.Disk Indicator: daemon start failed'))
       dialog.format_secondary_text(_('Yandex.Disk daemon failed to start because it is not' +
@@ -190,7 +173,7 @@ class Indicator(YDDaemon):      # Yandex.Disk appIndicator
       dialog.destroy()
       return retCode              # 0 when error is not critical or fixed (daemon has been configured via ya-setup)
 
-  def change(self, vals):       # Redefinition of daemon class call-back function
+  def change(self, vals):             # Implementation of daemon class call-back function
     '''
     It handles daemon status changes by updating icon, creating messages and also update
     status information in menu (status, sizes and list of last synchronized items).
@@ -223,7 +206,26 @@ class Indicator(YDDaemon):      # Yandex.Disk appIndicator
         else:                                  # status is 'error' or 'no-net'
           self.notify.send(_('Synchronization ERROR'))
 
-  def setIconTheme(self, theme):    # Determine paths to icons according to current theme
+  ####### Own classes/methods 
+  def __init__(self, path, ID):
+    # Create indicator notification engine
+    self.notify = Notification(_('Yandex.Disk ') + ID)
+    # Setup icons theme
+    self.setIconTheme(config['theme'])
+    # Create timer object for icon animation support (don't start it here)
+    self.iconTimer = self.Timer(777, self._iconAnimation, start=False)
+    # Create App Indicator
+    self.ind = appIndicator.Indicator.new(
+      "yandex-disk-%s" % ID[1: -1],
+      self.icon['paused'],
+      appIndicator.IndicatorCategory.APPLICATION_STATUS)
+    self.ind.set_status(appIndicator.IndicatorStatus.ACTIVE)
+    self.menu = self.Menu(self, ID)               # Create menu for daemon
+    self.ind.set_menu(self.menu)                  # Attach menu to indicator
+    # Initialize Yandex.Disk daemon connection object
+    super(Indicator, self).__init__(path, ID)
+
+  def setIconTheme(self, theme):      # Determine paths to icons according to current theme
     global installDir, configPath
     theme = 'light' if theme else 'dark'
     # Determine theme from application configuration settings
@@ -241,7 +243,7 @@ class Indicator(YDDaemon):      # Yandex.Disk appIndicator
     # Set theme paths according to existence of first busy icon
     self.themePath = userPath if pathExists(userIcon) else defaultPath
 
-  def updateIcon(self, status):             # Change indicator icon according to just changed daemon status
+  def updateIcon(self, status):       # Change indicator icon according to just changed daemon status
     # Set icon according to the current status
     self.ind.set_icon(self.icon[status])
     # Handle animation
@@ -251,14 +253,14 @@ class Indicator(YDDaemon):      # Yandex.Disk appIndicator
     else:
       self.iconTimer.stop()                 # Stop animation timer when status is not busy
 
-  def _iconAnimation(self):         # Changes busy icon by loop (triggered by self.timer)
+  def _iconAnimation(self):           # Changes busy icon by loop (triggered by self.timer)
     # Set next animation icon
     self.ind.set_icon(pathJoin(self.themePath, 'yd-busy' + str(self._seqNum) + '.png'))
     # Calculate next icon number
     self._seqNum = self._seqNum % 5 + 1   # 5 icon numbers in loop (1-2-3-4-5-1-2-3...)
     return True                           # True required to continue triggering by timer
 
-  class Menu(Gtk.Menu):             # Indicator menu
+  class Menu(Gtk.Menu):               # Indicator menu
 
     def __init__(self, daemon, ID):
       self.daemon = daemon                      # Store reference to daemon object for future usage
@@ -431,7 +433,7 @@ class Indicator(YDDaemon):      # Yandex.Disk appIndicator
       appExit()
 
 #### Application functions and classes
-class Preferences(Gtk.Dialog):  # Preferences window of application and daemons
+class Preferences(Gtk.Dialog):        # Preferences window of application and daemons
 
   class excludeDirsList(Gtk.Dialog):                                      # Excluded list dialogue
 
@@ -619,7 +621,7 @@ class Preferences(Gtk.Dialog):  # Preferences window of application and daemons
     elif key == 'read-only':
       ow.set_sensitive(toggleState)
 
-def appExit(msg=None):          # Exit from application (it closes all indicators)
+def appExit(msg=None):                # Exit from application (it closes all indicators)
   global indicators
   for i in indicators:
     i.exit()
