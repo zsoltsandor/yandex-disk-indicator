@@ -72,6 +72,10 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     Watcher class for monitor of changes in file.
     '''
     def __init__(self, path, handler, par=None):
+      # path - path to watch
+      # hanler - callback function to handle the changes in path
+      # par - parameter to pass to call-back function
+      # Init is not activate watching. Use start method to activate watching.
       pass
 
     def start(self):                    # Activate watching
@@ -81,7 +85,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
       pass
 
   def errorDialog(self, err):           # Show error messages according to the error
-    # it is virtual method 
+    # it is virtual method
     return 0 
 
   def change(self, vals):               # Update handler
@@ -201,8 +205,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
   def __parseOutput(self, out):         # Parse the daemon output
     '''
     It parses the daemon output and check that something changed from last daemon status.
-    The self.__v dictionary is updated with new daemon statuses and self.update set represents
-    the changes in self.__v. It returns True is something changed
+    The self.__v dictionary is updated with new daemon statuses. It returns True is something changed
 
     Daemon status is converted form daemon raw statuses into internal representation.
     Internal status can be on of the following: 'busy', 'idle', 'paused', 'none', 'no_net', 'error'.
@@ -221,7 +224,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     if len(output) == 2:
       files = output[1]
     else:
-      files = ''
+      futput[0].siles = ''
     output = output[0].splitlines()
     # Make a dictionary from named values (use only lines containing ':')
     res = dict([reFindall(r'\s*(.+):\s*(.*)', l)[0] for l in output if ':' in l])
@@ -267,9 +270,8 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
 
   def start(self):                      # Execute 'yandex-disk start'
     '''
-    Execute 'yandex-disk start' and return '' if success or error message if not
-    ... but sometime it starts successfully with error message
-    Additionally it starts iNotify monitoring in case of success start
+    Execute 'yandex-disk start' 
+    Additionally it starts watcher in case of success start
     '''
     if self.getOutput() != "":
       logger.info('Daemon is already started')
