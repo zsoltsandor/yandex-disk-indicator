@@ -205,6 +205,8 @@ class Indicator(YDDaemon):            # Yandex.Disk appIndicator
             self.notify.send(_('Yandex.Disk daemon has been stopped'))
         else:                                  # status is 'error' or 'no-net'
           self.notify.send(_('Synchronization ERROR'))
+    # Remember current status (required for Preferences dialog)
+    self.currentStatus = vals['status']
 
   ####### Own classes/methods 
   def __init__(self, path, ID):
@@ -603,7 +605,7 @@ class Preferences(Gtk.Dialog):        # Preferences window of application and da
     if key == 'theme':
         for i in indicators:                    # Update all indicators' icons
           i.setIconTheme(toggleState)           # Update icon theme
-          i.updateIcon(i.vals['status'])        # Update current icon
+          i.updateIcon(i.currentStatus)         # Update current icon
     elif key == 'autostart':
       if toggleState:
         copyFile(autoStartSrc, autoStartDst)
