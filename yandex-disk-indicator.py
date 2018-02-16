@@ -249,11 +249,11 @@ class Indicator(YDDaemon):            # Yandex.Disk appIndicator
     # Set icon according to the current status
     self.ind.set_icon(self.icon[status])
     # Handle animation
-    if status == 'busy':                # Just entered into 'busy' status
-      self._seqNum = 2                  # Next busy icon number for animation
-      self.iconTimer.start()                # Start animation timer
+    if status == 'busy':        # Just entered into 'busy' status
+      self._seqNum = 2          # Next busy icon number for animation
+      self.iconTimer.start()    # Start animation timer
     else:
-      self.iconTimer.stop()                 # Stop animation timer when status is not busy
+      self.iconTimer.stop()     # Stop animation timer when status is not busy
 
   def __iconAnimation(self):          # Changes busy icon by loop (triggered by self.timer)
     # Set next animation icon
@@ -623,11 +623,12 @@ class Preferences(Gtk.Dialog):        # Preferences window of application and da
     elif key == 'read-only':
       ow.set_sensitive(toggleState)
 
-def appExit(msg=None):                # Exit from application (it closes all indicators)
+def appExit():                        # Exit from application (it closes all indicators)
   global indicators
   for i in indicators:
     i.exit()
-  sysExit(msg)
+  # Request for exit from Gtk.main loop
+  Gtk.main_quit()
 
 ###################### MAIN #########################
 if __name__ == '__main__':
@@ -751,7 +752,7 @@ if __name__ == '__main__':
     indicators.append(Indicator(d.replace('~', getenv("HOME")),
                       _('#%d ') % len(indicators) if len(daemons) > 1 else ''))
   # Register the SIGTERM handler for graceful exit when indicator is killed
-  signal(SIGTERM, lambda _signo, _stack_frame: appExit(indicators))
+  signal(SIGTERM, lambda _1, _2: appExit())
 
   # Start GTK Main loop
   Gtk.main()
