@@ -83,34 +83,18 @@ class Indicator(YDDaemon):            # Yandex.Disk appIndicator
         Interface variables:
           active   - True when timer is currently running, otherwise - False
     '''
-    def __init__(self, interval, handler, par=None, start=True):
+    def __init__(self, interval, handler, start=True):
       self.interval = interval          # Timer interval (ms)
       self.handler = handler            # Handler function
-      self.par = par                    # Parameter of handler function
       self.active = False               # Current activity status
       if start:
         self.start()                    # Start timer if required
 
-    def start(self, interval=None):   # Start inactive timer or update if it is active
-      if interval is None:
-        interval = self.interval
+    def start(self):       # Start inactive timer or update if it is active
       if not self.active:
-        self.interval = interval
-        if self.par is None:
-          self.timer = timeout_add(interval, self.handler)
-        else:
-          self.timer = timeout_add(interval, self.handler, self.par)
+        self.timer = timeout_add(self.interval, self.handler)
         self.active = True
         # logger.debug('timer started %s %s' %(self.timer, interval))
-      else:
-        self.update(interval)
-
-    def update(self, interval):         # Update interval (restart active, not start if inactive)
-      if interval != self.interval:
-        self.interval = interval
-        if self.active:
-          self.stop()
-          self.start()
 
     def stop(self):                     # Stop active timer
       if self.active:
@@ -136,6 +120,7 @@ class Indicator(YDDaemon):            # Yandex.Disk appIndicator
       return retCode              # 0 when error is not critical or fixed (daemon has been configured via ya-setup)
 
   def change(self, vals):             # Implementation of daemon class call-back function
+    ### NOTE: it is called not from main thread, so it have to add action in main loop queue
     '''
     It handles daemon status changes by updating icon, creating messages and also update
     status information in menu (status, sizes and list of last synchronized items).
@@ -178,8 +163,14 @@ class Indicator(YDDaemon):            # Yandex.Disk appIndicator
     self.notify = Notification(_('Yandex.Disk ') + ID)
     # Setup icons theme
     self.setIconTheme(config['theme'])
-    # Create timer object for icon animation support (don't start it here)
-    self.iconTimer = self.Timer(777, self.__iconAnimation, start=False)
+    # Create staff for icon animation support (don't start it here)
+    def iconAnimation():          # Changes busy icon by loop (triggered by self.timer)
+      # Set next animation icon
+      self.ind.set_icon(pathJoin(self.themePath, 'yd-busy' + str(self._seqNum) + '.png'))
+      # Calculate next icon number
+      self._seqNum = self._seqNum % 5 + 1   # 5 icon numbers in loop (1-2-3-4-5-1-2-3...)
+      return True                           # True required to continue triggering by timer
+    self.iconTimer = self.Timer(777, iconAnimation, start=False)
     # Create App Indicator
     self.ind = appIndicator.Indicator.new(
       "yandex-disk-%s" % ID[1: -1],
@@ -218,13 +209,6 @@ class Indicator(YDDaemon):            # Yandex.Disk appIndicator
       self.iconTimer.start()    # Start animation timer
     else:
       self.iconTimer.stop()     # Stop animation timer when status is not busy
-
-  def __iconAnimation(self):          # Changes busy icon by loop (triggered by self.timer)
-    # Set next animation icon
-    self.ind.set_icon(pathJoin(self.themePath, 'yd-busy' + str(self._seqNum) + '.png'))
-    # Calculate next icon number
-    self._seqNum = self._seqNum % 5 + 1   # 5 icon numbers in loop (1-2-3-4-5-1-2-3...)
-    return True                           # True required to continue triggering by timer
 
   class Menu(Gtk.Menu):               # Indicator menu
 
@@ -361,27 +345,25 @@ class Indicator(YDDaemon):            # Yandex.Disk appIndicator
 
     def showOutput(self, widget):           # Request for daemon output
       widget.set_sensitive(False)                         # Disable menu item
-      self.daemon.RequestOutput(lambda t: self.displayOutput(t, widget))
-      # Request 
-    
-    def displayOutput(self, outText, widget):
-      ### NOTE: it may be called from not main thread, so it just add action in main loop queue
-      def do_display(outText, widget):
-        global logo
-        #outText = self.daemon.getOutput(True)
-        statusWindow = Gtk.Dialog(_('Yandex.Disk daemon output message'))
-        statusWindow.set_icon(logo)
-        statusWindow.set_border_width(6)
-        statusWindow.add_button(_('Close'), Gtk.ResponseType.CLOSE)
-        textBox = Gtk.TextView()                            # Create text-box to display daemon output
-        # Set output buffer with daemon output in user language
-        textBox.get_buffer().set_text(outText)
-        textBox.set_editable(False)
-        # Put it inside the dialogue content area
-        statusWindow.get_content_area().pack_start(textBox, True, True, 6)
-        statusWindow.show_all();  statusWindow.run();   statusWindow.destroy()
-        widget.set_sensitive(True)                          # Enable menu item
-      idle_add(do_display, outText, widget)
+      def displayOutput(outText, widget):
+        ### NOTE: it is called not from main thread, so it have to add action in main loop queue
+        def do_display(outText, widget):
+          global logo
+          #outText = self.daemon.getOutput(True)
+          statusWindow = Gtk.Dialog(_('Yandex.Disk daemon output message'))
+          statusWindow.set_icon(logo)
+          statusWindow.set_border_width(6)
+          statusWindow.add_button(_('Close'), Gtk.ResponseType.CLOSE)
+          textBox = Gtk.TextView()                            # Create text-box to display daemon output
+          # Set output buffer with daemon output in user language
+          textBox.get_buffer().set_text(outText)
+          textBox.set_editable(False)
+          # Put it inside the dialogue content area
+          statusWindow.get_content_area().pack_start(textBox, True, True, 6)
+          statusWindow.show_all();  statusWindow.run();   statusWindow.destroy()
+          widget.set_sensitive(True)                          # Enable menu item
+        idle_add(do_display, outText, widget)
+      self.daemon.output(lambda t: displayOutput(t, widget))
       
     def openInBrowser(self, widget, url):   # Open URL
       openNewBrowser(url)

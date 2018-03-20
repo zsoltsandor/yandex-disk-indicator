@@ -16,8 +16,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
   Public methods:
   __init__ - Handles initialization of the object and as a part - auto-start daemon if it
              is required by configuration settings.
-  getOuput - Provides daemon output (in user language when optional parameter userLang is
-             True)
+  output   - Provides daemon output (in user language)
   start    - Request to start daemon. Do nothing if it is alreday started
   stop     - Request to stop daemon. Do nothing if it is not started
   exit     - Handles 'Stop on exit' facility according to daemon configuration settings.
@@ -55,7 +54,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
 
   #################### Own classes/methods ####################
 
-  class Watcher(object):              # File changes watcher implementation
+  class Watcher(object):                 # File changes watcher implementation
     '''
     iNotify watcher object for monitor of changes daemon internal log for the fastest
     reaction on status change.
@@ -82,7 +81,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
       self._watch = self._watchMngr.add_watch(self.path, IN_MODIFY|IN_ACCESS, rec=False)
       self._status = True
 
-    def stop(self):                      # Stop iNotify watching
+    def stop(self):                # Stop iNotify watching
       if not self._status:
         return
       # Remove watch
@@ -91,7 +90,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
       self._iNotifier.stop()
       self._status = False
 
-  class __DConfig(Config):              # Redefined class for daemon config
+  class __DConfig(Config):               # Redefined class for daemon config
 
     def save(self):  # Update daemon config file
       # Make a new Config object
@@ -125,7 +124,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
       else:
         return False
 
-  def __init__(self, cfgFile, ID):      # Check that daemon installed and configured
+  def __init__(self, cfgFile, ID):       # Check that daemon installed and configured
     '''
     cfgFile  - full path to config file
     ID       - identity string '#<n> ' in multi-instance environment or
@@ -150,7 +149,8 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     if self.tmpDir is None:
         self.tmpDir = '/tmp'
     # Initialize watching staff
-    self.__watcher = self.Watcher(pathJoin(expanduser(self.config['dir']), '.sync/cli.log'), self.__eventHandler, par=True)
+    self.__watcher = self.Watcher(pathJoin(expanduser(self.config['dir']), '.sync/cli.log'), 
+                                  self.__eventHandler, par=True)
     # Set initial daemon status values
     self.__v = {'status': 'unknown', 'progress': '', 'laststatus': 'unknown', 'statchg': True,
                 'total': '...', 'used': '...', 'free': '...', 'trash': '...', 'szchg': True,
@@ -196,7 +196,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
           self.__tCnt += 1                        # Increase counter to increase delay next activation.
     self.__lock.release()
 
-  def getOutput(self, userLang=False):  # Get result of 'yandex-disk status'
+  def getOutput(self, userLang=False):   # Get result of 'yandex-disk status'
     cmd = [self.__YDC, '-c', self.config.fileName, 'status']
     if not userLang:      # Change locale settings when it required
       cmd = ['env', '-i', "LANG='en_US.UTF8'", "TMPDIR=%s"%self.tmpDir] + cmd
@@ -207,12 +207,10 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     # logger.debug('output = %s' % output)
     return output
 
-  def RequestOutput(self, callBack):     # Handler for request to disply the daemon output 
-    def do_output():
-      callBack(self.getOutput(True))
-    Thread(None, do_output).start()
+  def output(self, callBack):            # Handler for request to disply the daemon output 
+    Thread(None, lambda:callBack(self.getOutput(True))).start()
 
-  def __parseOutput(self, out):         # Parse the daemon output
+  def __parseOutput(self, out):          # Parse the daemon output
     '''
     It parses the daemon output and check that something changed from last daemon status.
     The self.__v dictionary is updated with new daemon statuses. It returns True is something changed
@@ -278,7 +276,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     # return True when something changed, if nothing changed - return False
     return self.__v['statchg'] or self.__v['szchg'] or self.__v['lastchg']
 
-  def start(self):                      # Execute 'yandex-disk start'
+  def start(self, wait=False):           # Execute 'yandex-disk start'
     '''
     Execute 'yandex-disk start' 
     Additionally it starts watcher in case of success start
@@ -295,9 +293,12 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
         logger.error('Daemon start failed:%s' % e.output)
         return
       self.__watcher.start()      # Activate file watcher
-    Thread(None, do_start).start()
+    t = Thread(None, do_start)
+    t.start()
+    if wait:
+      t.join()
 
-  def stop(self):                       # Execute 'yandex-disk stop'
+  def stop(self, wait=False):            # Execute 'yandex-disk stop'
     def do_stop():
       if self.getOutput() == "":
         logger.info('Daemon is not started')
@@ -308,14 +309,17 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
         logger.info('Start success, message: %s' % msg)
       except:
         logger.info('Start failed')
-    Thread(None, do_stop).start()
+    t = Thread(None, do_stop)
+    t.start()
+    if wait:
+      t.join()
 
-  def exit(self):                       # Handle daemon/indicator closing
+  def exit(self):                        # Handle daemon/indicator closing
     logger.debug("Indicator %sexit started: " % self.ID)
     self.__watcher.stop()
     self.__timer.cancel()  # stop event timer if it is running
     # Stop yandex-disk daemon if it is required by its configuration
     if self.config.get('stoponexitfromindicator', False):
-      self.stop()
+      self.stop(wait=True)
       logger.info('Demon %sstopped' % self.ID)
     logger.debug('Indicator %sexited' % self.ID)
