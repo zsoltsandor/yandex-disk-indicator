@@ -3,6 +3,9 @@
 
 from tools import *
 
+from pyinotify import ProcessEvent, WatchManager, ThreadedNotifier, IN_MODIFY, IN_ACCESS
+from threading import Timer as thTimer, enumerate as thList, Lock, Thread
+
 from logging import getLogger
 logger = getLogger('')
 
@@ -42,48 +45,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
   '''
   #################### Virtual classes/methods ##################
   # they have to be implemented in GUI part of code
-
-  class Timer(object):                  # Timer for triggering a function periodically
-    ''' Timer class methods:
-          __init__ - initialize the timer object with specified interval and handler. Start it
-                    if start value is not False. par - is parameter for handler call.
-          start    - Start timer. Optionally the new interval can be specified and if timer is
-                    already running then the interval is updated (timer restarted with new interval).
-          update   - Updates interval. If timer is running it is restarted with new interval. If it
-                    is not running - then new interval is just stored.
-          stop     - Stop running timer or do nothing if it is not running.
-        Interface variables:
-          active   - True when timer is currently running, otherwise - False
-    '''
-    def __init__(self, interval, handler, par=None, start=True):
-      pass
-
-    def start(self, interval=None):     # Start inactive timer or update if it is active
-      pass
-
-    def update(self, interval):         # Update interval (restart active, not start if inactive)
-      pass
-
-    def stop(self):                     # Stop active timer
-      pass
-
-  class Watcher(object):                # File changes watcher
-    '''
-    Watcher class for monitor of changes in file.
-    '''
-    def __init__(self, path, handler, par=None):
-      # path - path to watch
-      # hanler - callback function to handle the changes in path
-      # par - parameter to pass to call-back function
-      # Init is not activate watching. Use start method to activate watching.
-      pass
-
-    def start(self):                    # Activate watching
-      pass
-
-    def stop(self):                     # Stop watching
-      pass
-
+  
   def errorDialog(self, err):           # Show error messages according to the error
     # it is virtual method
     return 0 
@@ -92,6 +54,43 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     logger.debug('Update event: %s \nValues : %s' % (str(update), str(vals)))
 
   #################### Own classes/methods ####################
+
+  class Watcher(object):              # File changes watcher implementation
+    '''
+    iNotify watcher object for monitor of changes daemon internal log for the fastest
+    reaction on status change.
+    '''
+    def __init__(self, path, handler, par=None):
+      # Watched path
+      self.path = path
+      # Initialize iNotify watcher
+      class _EH(ProcessEvent):           # Event handler class for iNotifier
+        def process_IN_MODIFY(self, event):
+          handler(par)
+      self._watchMngr = WatchManager()   # Create watch manager
+      # Create PyiNotifier
+      self._iNotifier = ThreadedNotifier(self._watchMngr, _EH(), timeout=0.5)
+      self._iNotifier.start()
+      self._status = False
+
+    def start(self):               # Activate iNotify watching
+      if self._status:
+        return
+      if not pathExists(self.path):
+        logger.info("iNotiy was not started: path '"+self.path+"' was not found.")
+        return
+      self._watch = self._watchMngr.add_watch(self.path, IN_MODIFY|IN_ACCESS, rec=False)
+      self._status = True
+
+    def stop(self):                      # Stop iNotify watching
+      if not self._status:
+        return
+      # Remove watch
+      self._watchMngr.rm_watch(self._watch[self.path])
+      # Stop timer
+      self._iNotifier.stop()
+      self._status = False
+
   class __DConfig(Config):              # Redefined class for daemon config
 
     def save(self):  # Update daemon config file
@@ -151,18 +150,17 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     if self.tmpDir is None:
         self.tmpDir = '/tmp'
     # Initialize watching staff
-    self.__watchTimer = self.Timer(500, self.__eventHandler, par=False, start=True)
-    self.__cnt = 0
-    self.__watcher = self.Watcher(pathJoin(
-                          self.config['dir'].replace('~', getenv("HOME")), 
-                          '.sync/cli.log'),
-                          self.Timer,
-                          self.__eventHandler, 
-                          par=True)
+    self.__watcher = self.Watcher(pathJoin(expanduser(self.config['dir']), '.sync/cli.log'), self.__eventHandler, par=True)
     # Set initial daemon status values
     self.__v = {'status': 'unknown', 'progress': '', 'laststatus': 'unknown', 'statchg': True,
-                 'total': '...', 'used': '...', 'free': '...', 'trash': '...', 'szchg': True,
-                 'error':'', 'path':'', 'lastitems': [], 'lastchg': True}
+                'total': '...', 'used': '...', 'free': '...', 'trash': '...', 'szchg': True,
+                'error':'', 'path':'', 'lastitems': [], 'lastchg': True}
+    # Initialize timer staff
+    self.__timer = thTimer(0.3, self.__eventHandler, (False,))
+    self.__timer.start()
+    self.__tCnt = 0
+    # Lock for eventHandler (it is critical section that is called by timer and watcher threads)
+    self.__lock = Lock()
     if self.config.get('startonstartofindicator', True):
       self.start()                       # Start daemon if it is required
     else:
@@ -176,20 +174,27 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     It can be called by timer (when watch=False) or by watcher (when watch=True)
     '''
 
+    self.__lock.acquire()                          # It can be called from two different threads
     # Parse fresh daemon output. Parsing returns true when something changed
     if self.__parseOutput(self.getOutput()):
       logger.debug(self.ID + 'Event raised by' + (' Watcher' if watch else ' Timer'))
       self.change(self.__v)                   # Raise outside update event
     # --- Handle timer delays ---
     if watch:                                 # True means that it is called by watcher
-      self.__watchTimer.update(2000)                 # Set timer interval to 2 sec.
-      self.__cnt = 0                          # Reset counter as it was triggered not by timer
-    else:                                     # It called by timer
-      if self.__v['status'] != 'busy':        # In 'busy' keep update interval (2 sec.)
-        if self.__cnt < 9:                    # Increase interval up to 10 sec (2 + 8)
-          self.__watchTimer.update((2 + self.__cnt) * 1000)
-          self.__cnt += 1                     # Increase counter to increase delay next activation.
-    return True                               # True is required to continue activations by timer.
+      self.__timer.cancel()                       # Cancel timer if it still active
+      self.__timer = thTimer(2, self.__eventHandler, (False,))   # Set timer interval to 2 sec.
+      self.__timer.start()
+      self.__tCnt = 0                             # Reset counter as it was triggered not by timer
+    else:                                        # It called by timer
+      if self.__v['status'] == 'busy':           # In 'busy' keep update interval (2 sec.)
+        self.__timer = thTimer(2, self.__eventHandler, (False,))
+        self.__timer.start()
+      else:
+        if self.__tCnt < 9:                       # Increase interval up to 10 sec (2 + 8)
+          self.__timer = thTimer((2 + self.__tCnt), self.__eventHandler, (False,))
+          self.__timer.start()
+          self.__tCnt += 1                        # Increase counter to increase delay next activation.
+    self.__lock.release()
 
   def getOutput(self, userLang=False):  # Get result of 'yandex-disk status'
     cmd = [self.__YDC, '-c', self.config.fileName, 'status']
@@ -201,6 +206,11 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
       output = ''         # daemon is not running or bad
     # logger.debug('output = %s' % output)
     return output
+
+  def RequestOutput(self, callBack):     # Handler for request to disply the daemon output 
+    def do_output():
+      callBack(self.getOutput(True))
+    Thread(None, do_output).start()
 
   def __parseOutput(self, out):         # Parse the daemon output
     '''
@@ -224,7 +234,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     if len(output) == 2:
       files = output[1]
     else:
-      futput[0].siles = ''
+      files = ''
     output = output[0].splitlines()
     # Make a dictionary from named values (use only lines containing ':')
     res = dict([reFindall(r'\s*(.+):\s*(.*)', l)[0] for l in output if ':' in l])
@@ -273,32 +283,39 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     Execute 'yandex-disk start' 
     Additionally it starts watcher in case of success start
     '''
-    if self.getOutput() != "":
-      logger.info('Daemon is already started')
-      self.__watcher.start()    # Activate file watcher
-      return
-    try:                        # Try to start
-      msg = check_output([self.__YDC, '-c', self.config.fileName, 'start'], universal_newlines=True)
-      logger.info('Start success, message: %s' % msg)
-    except CalledProcessError as e:
-      logger.error('Daemon start failed:%s' % e.output)
-      return
-    self.__watcher.start()      # Activate file watcher
+    def do_start():
+      if self.getOutput() != "":
+        logger.info('Daemon is already started')
+        self.__watcher.start()    # Activate file watcher
+        return
+      try:                        # Try to start
+        msg = check_output([self.__YDC, '-c', self.config.fileName, 'start'], universal_newlines=True)
+        logger.info('Start success, message: %s' % msg)
+      except CalledProcessError as e:
+        logger.error('Daemon start failed:%s' % e.output)
+        return
+      self.__watcher.start()      # Activate file watcher
+    Thread(None, do_start).start()
 
   def stop(self):                       # Execute 'yandex-disk stop'
-    if self.getOutput() == "":
-      logger.info('Daemon is not started')
-      return
-    try:
-      msg = check_output([self.__YDC, '-c', self.config.fileName, 'stop'],
-                         universal_newlines=True)
-      logger.info('Start success, message: %s' % msg)
-    except:
-      logger.info('Start failed')
+    def do_stop():
+      if self.getOutput() == "":
+        logger.info('Daemon is not started')
+        return
+      try:
+        msg = check_output([self.__YDC, '-c', self.config.fileName, 'stop'],
+                          universal_newlines=True)
+        logger.info('Start success, message: %s' % msg)
+      except:
+        logger.info('Start failed')
+    Thread(None, do_stop).start()
 
   def exit(self):                       # Handle daemon/indicator closing
+    logger.debug("Indicator %sexit started: " % self.ID)
     self.__watcher.stop()
+    self.__timer.cancel()  # stop event timer if it is running
     # Stop yandex-disk daemon if it is required by its configuration
-    if self.__v['status'] != 'none' and self.config.get('stoponexitfromindicator', False):
+    if self.config.get('stoponexitfromindicator', False):
       self.stop()
       logger.info('Demon %sstopped' % self.ID)
+    logger.debug('Indicator %sexited' % self.ID)
