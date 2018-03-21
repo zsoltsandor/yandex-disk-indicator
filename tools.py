@@ -411,3 +411,4 @@ def setProcName(newname):
   buff = create_string_buffer(len(newname) + 1)
   buff.value = bytes(newname, 'UTF8')
   libc.prctl(15, byref(buff), 0, 0, 0)
+  

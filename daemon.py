@@ -20,8 +20,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
   start    - Request to start daemon. Do nothing if it is alreday started. Executed in separate thread
   stop     - Request to stop daemon. Do nothing if it is not started. Executed in separate thread
   exit     - Handles 'Stop on exit' facility according to daemon configuration settings.
-  change   - Call-back function for handling daemon status changes outside the class.
-             It have to be redefined by UI class.
+  change   - Virtual method for handling daemon status changes. It have to be redefined by UI class.
              The parameters of the call - status values dictionary with following keys:
               'status' - current daemon status
               'progress' - synchronization progress or ''
@@ -36,7 +35,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
               'lastchg' - True indicates that lastitems was changed
               'error' - error message
               'path' - path of error
-  error
+  error    - Virtual method for error handling. It have to be redefined by UI class.
  
   Class interface variables:
   ID       - the daemon identity string (empty in single daemon configuration)
@@ -137,8 +136,8 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     # Try to read Yandex.Disk configuration file and make sure that it is correctly configured
     self.config = self.__DConfig(cfgFile, load=False)
     while not (self.config.load() and
-               pathExists(self.config.get('dir', '')) and
-               pathExists(self.config.get('auth', ''))):
+               pathExists(expanduser(self.config.get('dir', ''))) and
+               pathExists(expanduser(self.config.get('auth', '')))):
       if self.errorDialog(cfgFile) != 0:
         if ID != '':
           self.config['dir'] = ''
@@ -209,7 +208,6 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     '''
     It parses the daemon output and check that something changed from last daemon status.
     The self.__v dictionary is updated with new daemon statuses. It returns True is something changed
-
     Daemon status is converted form daemon raw statuses into internal representation.
     Internal status can be on of the following: 'busy', 'idle', 'paused', 'none', 'no_net', 'error'.
     Conversion is done by following rules:
@@ -287,7 +285,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
         return
       try:                        # Try to start
         msg = check_output([self.__YDC, '-c', self.config.fileName, 'start'], universal_newlines=True)
-        logger.info('Start success, message: %s' % msg)
+        logger.info('Daemon started, message: %s' % msg)
       except CalledProcessError as e:
         logger.error('Daemon start failed:%s' % e.output)
         return
@@ -305,9 +303,9 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
       try:
         msg = check_output([self.__YDC, '-c', self.config.fileName, 'stop'],
                           universal_newlines=True)
-        logger.info('Start success, message: %s' % msg)
+        logger.info('Daemon stopped, message: %s' % msg)
       except:
-        logger.info('Start failed')
+        logger.info('Daemon stop failed')
     t = Thread(target=do_stop)
     t.start()
     if wait:

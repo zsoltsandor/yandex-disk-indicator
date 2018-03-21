@@ -459,7 +459,7 @@ class Preferences(Gtk.Dialog):        # Preferences window of application and da
             self.dirset.append(path)
             self.dconfig.changed = True
       dialog.destroy()
-      logger.debug(str(self.dirset))
+      #logger.debug(str(self.dirset))
 
   def __init__(self, widget):
     global config, indicators, logo
@@ -563,8 +563,8 @@ class Preferences(Gtk.Dialog):        # Preferences window of application and da
         deleteFile(autoStartDst)
     elif key == 'fmextensions':
       if not button.get_inconsistent():         # It is a first call
-        if not activateActions(toggleState, installDir):               # When activation/deactivation is not success:
-          toggleState = not toggleState         # revert settings back
+        if not activateActions(toggleState, installDir):            
+          toggleState = not toggleState         # When activation/deactivation is not success: revert settings back
           button.set_inconsistent(True)         # set inconsistent state to detect second call
           button.set_active(toggleState)        # set check-button to reverted status
           # set_active will raise again the 'toggled' event
@@ -586,7 +586,6 @@ if __name__ == '__main__':
   appName = 'yandex-disk-indicator'
   # See appVer in the beginnig of the code
   appHomeName = 'yd-tools'
-  # Check for already running instance of the indicator application
   installDir = pathJoin('/usr/share', appHomeName)
   logo = Pixbuf.new_from_file(pathJoin(installDir, 'icons/yd-128.png'))
   configPath = pathJoin(getenv("HOME"), '.config', appHomeName)
@@ -627,16 +626,13 @@ if __name__ == '__main__':
   form: key=value[,value[,value ...]] where keys and values can be quoted ("...") or not.
   The following key words are reserved for configuration:
     autostart, notifications, theme, fmextensions and daemons.
-
   The dictionary 'config' stores the config settings for usage in code. Its values are saved to
   config file on exit from the Menu.Preferences dialogue or when there is no configuration file
   when application starts.
-
   Note that daemon settings ('dir', 'read-only', 'overwrite' and 'exclude_dir') are stored
   in ~/ .config/yandex-disk/config.cfg file. They are read in YDDaemon.__init__() method
   (in dictionary YDDaemon.config). Their values are saved to daemon config file also
   on exit from Menu.Preferences dialogue.
-
   Additionally 'startonstartofindicator' and 'stoponexitfromindicator' values are added into daemon
   configuration file to provide the functionality of obsolete 'startonstart' and 'stoponexit'
   values for each daemon individually.
