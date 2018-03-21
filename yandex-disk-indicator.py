@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #
 appName = 'yandex-disk-indicator'
-appVer = '1.9.18'
+appVer = '1.10.0'
 #
 from datetime import datetime
 COPYRIGHT = 'Copyright ' + '\u00a9' + ' 2013-' + str(datetime.today().year) + ' Sly_tom_cat'
@@ -71,38 +71,7 @@ class Notification(object):           # On-screen notification
 class Indicator(YDDaemon):            # Yandex.Disk appIndicator
 
   ####### YDDaemon virtual classes/methods implementations
-  class Timer(object):                # Timer implementation
-    ''' Timer class methods:
-          __init__ - initialize the timer object with specified interval and handler. Start it
-                    if start value is not False. par - is parameter for handler call.
-          start    - Start timer. Optionally the new interval can be specified and if timer is
-                    already running then the interval is updated (timer restarted with new interval).
-          update   - Updates interval. If timer is running it is restarted with new interval. If it
-                    is not running - then new interval is just stored.
-          stop     - Stop running timer or do nothing if it is not running.
-        Interface variables:
-          active   - True when timer is currently running, otherwise - False
-    '''
-    def __init__(self, interval, handler, start=True):
-      self.interval = interval          # Timer interval (ms)
-      self.handler = handler            # Handler function
-      self.active = False               # Current activity status
-      if start:
-        self.start()                    # Start timer if required
-
-    def start(self):       # Start inactive timer or update if it is active
-      if not self.active:
-        self.timer = timeout_add(self.interval, self.handler)
-        self.active = True
-        # logger.debug('timer started %s %s' %(self.timer, interval))
-
-    def stop(self):                     # Stop active timer
-      if self.active:
-        # logger.debug('timer to stop %s' %(self.timer))
-        source_remove(self.timer)
-        self.active = False
-
-  def errorDialog(self, configPath):  # Show error messages implementation
+  def error(self, configPath):        # Show error messages implementation
       dialog = Gtk.MessageDialog(None, 0, Gtk.MessageType.INFO, Gtk.ButtonsType.OK_CANCEL,
                                   _('Yandex.Disk Indicator: daemon start failed'))
       dialog.format_secondary_text(_('Yandex.Disk daemon failed to start because it is not' +
@@ -386,6 +355,34 @@ class Indicator(YDDaemon):            # Yandex.Disk appIndicator
 
     def close(self, widget):                # Quit from indicator
       appExit()
+
+  class Timer(object):                # Timer implementation
+    ''' Timer class methods:
+          __init__ - initialize the timer object with specified interval and handler. Start it
+                    if start value is not False. 
+          start    - Start timer if it is not started yet.
+          stop     - Stop running timer or do nothing if it is not running.
+        Interface variables:
+          active   - True when timer is currently running, otherwise - False
+    '''
+    def __init__(self, interval, handler, start=True):
+      self.interval = interval          # Timer interval (ms)
+      self.handler = handler            # Handler function
+      self.active = False               # Current activity status
+      if start:
+        self.start()                    # Start timer if required
+
+    def start(self):       # Start inactive timer or update if it is active
+      if not self.active:
+        self.timer = timeout_add(self.interval, self.handler)
+        self.active = True
+        # logger.debug('timer started %s %s' %(self.timer, interval))
+
+    def stop(self):                     # Stop active timer
+      if self.active:
+        # logger.debug('timer to stop %s' %(self.timer))
+        source_remove(self.timer)
+        self.active = False
 
 #### Application functions and classes
 class Preferences(Gtk.Dialog):        # Preferences window of application and daemons

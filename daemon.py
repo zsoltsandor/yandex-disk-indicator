@@ -4,30 +4,25 @@
 from tools import *
 
 from pyinotify import ProcessEvent, WatchManager, ThreadedNotifier, IN_MODIFY, IN_ACCESS
-from threading import Timer as thTimer, enumerate as thList, Lock, Thread
+from threading import Timer as thTimer, Lock, Thread
 
 from logging import getLogger
 logger = getLogger('')
 
-#################### Main daemon/indicator classes ####################
+#################### Main daemon class ####################
 class YDDaemon(object):         # Yandex.Disk daemon interface
   '''
   This is the fully automated class that serves as daemon interface.
   Public methods:
   __init__ - Handles initialization of the object and as a part - auto-start daemon if it
              is required by configuration settings.
-  output   - Provides daemon output (in user language)
-  start    - Request to start daemon. Do nothing if it is alreday started
-  stop     - Request to stop daemon. Do nothing if it is not started
+  output   - Provides daemon output (in user language) through the parameter of callback. Executed in separate thread 
+  start    - Request to start daemon. Do nothing if it is alreday started. Executed in separate thread
+  stop     - Request to stop daemon. Do nothing if it is not started. Executed in separate thread
   exit     - Handles 'Stop on exit' facility according to daemon configuration settings.
   change   - Call-back function for handling daemon status changes outside the class.
              It have to be redefined by UI class.
-             The parameters of the call - status values dictionary (see __v description below)
-
-  Class interface variables:
-  ID       - the daemon identity string (empty in single daemon configuration)
-  config   - The daemon configuration dictionary (object of _DConfig(Config) class)
-  __v      - private status values dictionary with following keys:
+             The parameters of the call - status values dictionary with following keys:
               'status' - current daemon status
               'progress' - synchronization progress or ''
               'laststatus' - previous daemon status
@@ -41,20 +36,24 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
               'lastchg' - True indicates that lastitems was changed
               'error' - error message
               'path' - path of error
+  error
+ 
+  Class interface variables:
+  ID       - the daemon identity string (empty in single daemon configuration)
+  config   - The daemon configuration dictionary (object of _DConfig(Config) class)
   '''
-  #################### Virtual classes/methods ##################
+  #################### Virtual methods ##################
   # they have to be implemented in GUI part of code
   
-  def errorDialog(self, err):           # Show error messages according to the error
-    # it is virtual method
+  def error(self, err):                    # Error handler
+    logger.debug(err)
     return 0 
 
-  def change(self, vals):               # Update handler
+  def change(self, vals):                  # Update handler
     logger.debug('Update event: %s \nValues : %s' % (str(update), str(vals)))
 
-  #################### Own classes/methods ####################
-
-  class Watcher(object):                 # File changes watcher implementation
+  #################### Private classes ####################
+  class __Watcher(object):                 # File changes watcher implementation
     '''
     iNotify watcher object for monitor of changes daemon internal log for the fastest
     reaction on status change.
@@ -63,34 +62,34 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
       # Watched path
       self.path = path
       # Initialize iNotify watcher
-      class _EH(ProcessEvent):           # Event handler class for iNotifier
+      class EH(ProcessEvent):            # Event handler class for iNotifier
         def process_IN_MODIFY(self, event):
           handler(par)
-      self._watchMngr = WatchManager()   # Create watch manager
+      self.watchMngr = WatchManager()    # Create watch manager
       # Create PyiNotifier
-      self._iNotifier = ThreadedNotifier(self._watchMngr, _EH(), timeout=0.5)
-      self._iNotifier.start()
-      self._status = False
+      self.iNotifier = ThreadedNotifier(self.watchMngr, EH(), timeout=0.5)
+      self.iNotifier.start()
+      self.status = False
 
     def start(self):               # Activate iNotify watching
-      if self._status:
+      if self.status:
         return
       if not pathExists(self.path):
         logger.info("iNotiy was not started: path '"+self.path+"' was not found.")
         return
-      self._watch = self._watchMngr.add_watch(self.path, IN_MODIFY|IN_ACCESS, rec=False)
-      self._status = True
+      self.watch = self.watchMngr.add_watch(self.path, IN_MODIFY|IN_ACCESS, rec=False)
+      self.status = True
 
     def stop(self):                # Stop iNotify watching
-      if not self._status:
+      if not self.status:
         return
       # Remove watch
-      self._watchMngr.rm_watch(self._watch[self.path])
+      self.watchMngr.rm_watch(self.watch[self.path])
       # Stop timer
-      self._iNotifier.stop()
-      self._status = False
+      self.iNotifier.stop()
+      self.status = False
 
-  class __DConfig(Config):               # Redefined class for daemon config
+  class __DConfig(Config):                 # Redefined class for daemon config
 
     def save(self):  # Update daemon config file
       # Make a new Config object
@@ -124,7 +123,8 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
       else:
         return False
 
-  def __init__(self, cfgFile, ID):       # Check that daemon installed and configured
+  #################### Private methods ####################
+  def __init__(self, cfgFile, ID):         # Check that daemon installed and configured and initialize object
     '''
     cfgFile  - full path to config file
     ID       - identity string '#<n> ' in multi-instance environment or
@@ -148,55 +148,53 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     self.tmpDir = getenv("TMPDIR")
     if self.tmpDir is None:
         self.tmpDir = '/tmp'
-    # Initialize watching staff
-    self.__watcher = self.Watcher(pathJoin(expanduser(self.config['dir']), '.sync/cli.log'), 
-                                  self.__eventHandler, par=True)
     # Set initial daemon status values
     self.__v = {'status': 'unknown', 'progress': '', 'laststatus': 'unknown', 'statchg': True,
                 'total': '...', 'used': '...', 'free': '...', 'trash': '...', 'szchg': True,
                 'error':'', 'path':'', 'lastitems': [], 'lastchg': True}
+    # Declare event handler staff for callback from watcher and timer
+    self.__tCnt = 0                          # Timer event counter 
+    self.__lock = Lock()                     # event handler lock 
+    def eventHandler(watch):
+      '''
+      Handles watcher (when watch=False) and and timer (when watch=True) events.
+      After receiving and parsing the daemon output it raises outside change event if daemon changes
+      at least one of its status values.
+      '''
+      # Enter to critical section through acquiring of the lock as it can be called from two different threads
+      self.__lock.acquire()
+      # Parse fresh daemon output. Parsing returns true when something changed
+      if self.__parseOutput(self.__getOutput()):
+        logger.debug(self.ID + 'Event raised by' + (' Watcher' if watch else ' Timer'))
+        self.change(self.__v)                # Call the callback of update event handler 
+      # --- Handle timer delays ---
+      self.__timer.cancel()                  # Cancel timer if it still active
+      if watch or self.__v['status'] == 'busy':
+        delay = 2                            # Initial delay
+        self.__tCnt = 0                      # Reset counter 
+      else:                                  # It called by timer
+        delay = 2 + self.__tCnt              # Increase interval up to 10 sec (2 + 8)
+        self.__tCnt += 1                     # Increase counter to increase delay next activation.
+      if self.__tCnt < 9:                  
+        self.__timer = thTimer(delay, eventHandler, (False,))
+        self.__timer.start()
+      # Leave the critical section
+      self.__lock.release()
+    
+    # Initialize watcher staff
+    self.__watcher = self.__Watcher(pathJoin(expanduser(self.config['dir']), '.sync/cli.log'), 
+                               eventHandler, par=True)
     # Initialize timer staff
-    self.__timer = thTimer(0.3, self.__eventHandler, (False,))
+    self.__timer = thTimer(0.3, eventHandler, (False,))
     self.__timer.start()
-    self.__tCnt = 0
-    # Lock for eventHandler (it is critical section that is called by timer and watcher threads)
-    self.__lock = Lock()
+
+    # Start daemon if it is required in configuration
     if self.config.get('startonstartofindicator', True):
-      self.start()                       # Start daemon if it is required
+      self.start()                       
     else:
       self.__watcher.start()             # try to activate file watcher
 
-  def __eventHandler(self, watch):       # Daemon event handler
-    '''
-    Handle watcher and and timer based events.
-    After receiving and parsing the daemon output it raises outside change event if daemon changes
-    at least one of its status values.
-    It can be called by timer (when watch=False) or by watcher (when watch=True)
-    '''
-
-    self.__lock.acquire()                          # It can be called from two different threads
-    # Parse fresh daemon output. Parsing returns true when something changed
-    if self.__parseOutput(self.getOutput()):
-      logger.debug(self.ID + 'Event raised by' + (' Watcher' if watch else ' Timer'))
-      self.change(self.__v)                   # Raise outside update event
-    # --- Handle timer delays ---
-    if watch:                                 # True means that it is called by watcher
-      self.__timer.cancel()                       # Cancel timer if it still active
-      self.__timer = thTimer(2, self.__eventHandler, (False,))   # Set timer interval to 2 sec.
-      self.__timer.start()
-      self.__tCnt = 0                             # Reset counter as it was triggered not by timer
-    else:                                        # It called by timer
-      if self.__v['status'] == 'busy':           # In 'busy' keep update interval (2 sec.)
-        self.__timer = thTimer(2, self.__eventHandler, (False,))
-        self.__timer.start()
-      else:
-        if self.__tCnt < 9:                       # Increase interval up to 10 sec (2 + 8)
-          self.__timer = thTimer((2 + self.__tCnt), self.__eventHandler, (False,))
-          self.__timer.start()
-          self.__tCnt += 1                        # Increase counter to increase delay next activation.
-    self.__lock.release()
-
-  def getOutput(self, userLang=False):   # Get result of 'yandex-disk status'
+  def __getOutput(self, userLang=False):   # Get result of 'yandex-disk status'
     cmd = [self.__YDC, '-c', self.config.fileName, 'status']
     if not userLang:      # Change locale settings when it required
       cmd = ['env', '-i', "LANG='en_US.UTF8'", "TMPDIR=%s"%self.tmpDir] + cmd
@@ -207,10 +205,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     # logger.debug('output = %s' % output)
     return output
 
-  def output(self, callBack):            # Handler for request to disply the daemon output 
-    Thread(None, lambda:callBack(self.getOutput(True))).start()
-
-  def __parseOutput(self, out):          # Parse the daemon output
+  def __parseOutput(self, out):            # Parse the daemon output
     '''
     It parses the daemon output and check that something changed from last daemon status.
     The self.__v dictionary is updated with new daemon statuses. It returns True is something changed
@@ -276,13 +271,17 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     # return True when something changed, if nothing changed - return False
     return self.__v['statchg'] or self.__v['szchg'] or self.__v['lastchg']
 
-  def start(self, wait=False):           # Execute 'yandex-disk start'
+  #################### Interface methods ####################
+  def output(self, callBack):              # Receive daemon output in separate thread and pass it back through the callback
+    Thread(target=lambda:callBack(self.__getOutput(True))).start()
+
+  def start(self, wait=False):             # Execute 'yandex-disk start' in separate thread
     '''
-    Execute 'yandex-disk start' 
+    Execute 'yandex-disk start' in separate thread
     Additionally it starts watcher in case of success start
     '''
     def do_start():
-      if self.getOutput() != "":
+      if self.__getOutput() != "":
         logger.info('Daemon is already started')
         self.__watcher.start()    # Activate file watcher
         return
@@ -293,14 +292,14 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
         logger.error('Daemon start failed:%s' % e.output)
         return
       self.__watcher.start()      # Activate file watcher
-    t = Thread(None, do_start)
+    t = Thread(target=do_start)
     t.start()
     if wait:
       t.join()
 
-  def stop(self, wait=False):            # Execute 'yandex-disk stop'
+  def stop(self, wait=False):              # Execute 'yandex-disk stop' in separate thread
     def do_stop():
-      if self.getOutput() == "":
+      if self.__getOutput() == "":
         logger.info('Daemon is not started')
         return
       try:
@@ -309,12 +308,12 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
         logger.info('Start success, message: %s' % msg)
       except:
         logger.info('Start failed')
-    t = Thread(None, do_stop)
+    t = Thread(target=do_stop)
     t.start()
     if wait:
       t.join()
 
-  def exit(self):                        # Handle daemon/indicator closing
+  def exit(self):                          # Handle daemon/indicator closing
     logger.debug("Indicator %sexit started: " % self.ID)
     self.__watcher.stop()
     self.__timer.cancel()  # stop event timer if it is running
