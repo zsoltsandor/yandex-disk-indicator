@@ -586,12 +586,13 @@ if __name__ == '__main__':
   appName = 'yandex-disk-indicator'
   # See appVer in the beginnig of the code
   appHomeName = 'yd-tools'
+  # Check for already running instance of the indicator application
   installDir = pathJoin('/usr/share', appHomeName)
   logo = Pixbuf.new_from_file(pathJoin(installDir, 'icons/yd-128.png'))
   configPath = pathJoin(getenv("HOME"), '.config', appHomeName)
-  # .desktop files locations for indicator auto-start facility
+  # Define .desktop files locations for indicator auto-start facility
   autoStartSrc = '/usr/share/applications/Yandex.Disk-indicator.desktop'
-  autoStartDst = pathJoin(getenv("HOME"), '.config/autostart/Yandex.Disk-indicator.desktop')
+  autoStartDst = expanduser('~/.config/autostart/Yandex.Disk-indicator.desktop')
 
   # Initialize logging
   basicConfig(format='%(asctime)-15s %(levelname)-8s %(message)s')
@@ -663,14 +664,14 @@ if __name__ == '__main__':
     # Activate indicator automatic start on system start-up
     if not pathExists(autoStartDst):
       try:
-        makeDirs(pathJoin(getenv("HOME"), '.config/autostart'))
+        makeDirs(expanduser('~/.config/autostart'))
         copyFile(autoStartSrc, autoStartDst)
         config['autostart'] = True
       except:
         logger.error('Can\'t activate indicator automatic start on system start-up')
 
     # Activate FM actions according to config (as it is first run)
-    activateActions(config['fmextensions'], installDir)
+    activateActions(config['fmextensions'])
     # Default settings should be saved (later)
     config.changed = True
 
@@ -700,7 +701,7 @@ if __name__ == '__main__':
   indicators = []
   for d in daemons:
     indicators.append(Indicator(d, _('#%d ') % len(indicators) if len(daemons) > 1 else ''))
-  
+
   # Register the SIGTERM handler for graceful exit when indicator is killed
   signal(SIGTERM, lambda _1, _2: appExit())
 
