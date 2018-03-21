@@ -370,7 +370,7 @@ def activateActions(activate, installDir):  # Install/deinstall file extensions
     logger.error("The following error occurred during the FM actions activation:\n %s" % str(e))
   return result
 
-def argParse(appVer):           # Parse command line arguments
+def argParse(ver):              # Parse command line arguments
   parser = ArgumentParser(description=_('Desktop indicator for yandex-disk daemon'), add_help=False)
   group = parser.add_argument_group(_('Options'))
   group.add_argument('-l', '--log', type=int, choices=range(10, 60, 10), dest='level', default=30,
@@ -389,7 +389,7 @@ def argParse(appVer):           # Parse command line arguments
             help=_('Path to configuration file of daemon that should be removed' +
                    ' from daemos list. Default: \'\''))
   group.add_argument('-h', '--help', action='help', help=_('Show this help message and exit'))
-  group.add_argument('-v', '--version', action='version', version='%(prog)s v.' + appVer,
+  group.add_argument('-v', '--version', action='version', version='%(prog)s v.' + ver,
             help=_('Print version and exit'))
   return parser.parse_args()
 
