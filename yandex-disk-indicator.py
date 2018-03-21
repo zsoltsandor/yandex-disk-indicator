@@ -675,11 +675,11 @@ if __name__ == '__main__':
     config.changed = True
 
   # Add new daemon if it is not in current list
-  daemons = CVal(config['daemons'])
+  daemons = [expanduser(d) for d in CVal(config['daemons'])]
   if args.cfg:
     args.cfg = expanduser(args.cfg)
     if args.cfg not in daemons:
-      daemons.add(args.cfg)
+      daemons.append(args.cfg)
       config.changed = True
   # Remove daemon if it is in the current list
   if args.rcfg:
@@ -688,19 +688,19 @@ if __name__ == '__main__':
       daemons.remove(args.rcfg)
       config.changed = True
   # Check that at least one daemon is in the daemons list
-  if len(daemons) == 0:
+  if not daemons:
     sysExit(_('No daemons specified.\nCheck correctness of -r and -c options.'))
   # Update config if daemons list has been changed
   if config.changed:
-    config['daemons'] = daemons.get()
+    config['daemons'] = CVal(daemons).get()
     # Update configuration file
     config.save()
 
   # Make indicator objects for each daemon in daemons list
   indicators = []
   for d in daemons:
-    indicators.append(Indicator(d.replace('~', getenv("HOME")),
-                      _('#%d ') % len(indicators) if len(daemons) > 1 else ''))
+    indicators.append(Indicator(d, _('#%d ') % len(indicators) if len(daemons) > 1 else ''))
+  
   # Register the SIGTERM handler for graceful exit when indicator is killed
   signal(SIGTERM, lambda _1, _2: appExit())
 
