@@ -178,7 +178,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     
     # Initialize watcher staff
     self.__watcher = self.__Watcher(pathJoin(expanduser(self.config['dir']), '.sync/cli.log'), 
-                               eventHandler, True)
+                               eventHandler, (True,))
     # Initialize timer staff
     self.__timer = thTimer(0.3, eventHandler, (False,))
     self.__timer.start()
