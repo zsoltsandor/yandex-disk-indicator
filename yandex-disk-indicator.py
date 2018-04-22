@@ -448,16 +448,17 @@ class Preferences(Gtk.Dialog):        # Preferences window of application and da
                                      (_('Close'), Gtk.ResponseType.CANCEL,
                                       _('Select'), Gtk.ResponseType.ACCEPT))
       dialog.set_default_response(Gtk.ResponseType.CANCEL)
+      dialog.set_select_multiple(True)
       rootDir = self.dconfig['dir']
       dialog.set_current_folder(rootDir)
       if dialog.run() == Gtk.ResponseType.ACCEPT:
-        path = dialog.get_filename()
-        if path.startswith(rootDir):
-          path = relativePath(path, start=rootDir)
-          if path not in self.dirset:
-            self.exList.append([False, path])
-            self.dirset.append(path)
-            self.dconfig.changed = True
+        for path in dialog.get_filenames()
+          if path.startswith(rootDir):
+            path = relativePath(path, start=rootDir)
+            if path not in self.dirset:
+              self.exList.append([False, path])
+              self.dirset.append(path)
+              self.dconfig.changed = True
       dialog.destroy()
       #logger.debug(str(self.dirset))
 
