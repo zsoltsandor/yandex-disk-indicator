@@ -452,7 +452,7 @@ class Preferences(Gtk.Dialog):        # Preferences window of application and da
       rootDir = self.dconfig['dir']
       dialog.set_current_folder(rootDir)
       if dialog.run() == Gtk.ResponseType.ACCEPT:
-        for path in dialog.get_filenames()
+        for path in dialog.get_filenames():
           if path.startswith(rootDir):
             path = relativePath(path, start=rootDir)
             if path not in self.dirset:

@@ -3,7 +3,7 @@
 
 from tools import *
 
-from pyinotify import ProcessEvent, WatchManager, ThreadedNotifier, IN_MODIFY, IN_ACCESS
+from os import stat
 from threading import Timer as thTimer, Lock, Thread
 
 from logging import getLogger
@@ -53,40 +53,36 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
 
   #################### Private classes ####################
   class __Watcher(object):                 # File changes watcher implementation
-    '''
-    iNotify watcher object for monitor of changes daemon internal log for the fastest
-    reaction on status change.
-    '''
-    def __init__(self, path, handler, par=None):
-      # Watched path
+    def __init__(self, path, handler, *args, **kwargs):
       self.path = path
-      # Initialize iNotify watcher
-      class EH(ProcessEvent):            # Event handler class for iNotifier
-        def process_IN_MODIFY(self, event):
-          handler(par)
-      self.watchMngr = WatchManager()    # Create watch manager
-      # Create PyiNotifier
-      self.iNotifier = ThreadedNotifier(self.watchMngr, EH(), timeout=500)
-      self.iNotifier.start()
+      self.handler = handler
+      self.args = args
+      self.kwargs = kwargs
+      # Don't start timer initially
       self.status = False
 
-    def start(self):               # Activate iNotify watching
+    def start(self):                    # Activate iNotify watching
       if self.status:
         return
       if not pathExists(self.path):
-        logger.info("iNotiy was not started: path '"+self.path+"' was not found.")
+        logger.info("Watcher was not started: path '"+self.path+"' was not found.")
         return
-      self.watch = self.watchMngr.add_watch(self.path, IN_MODIFY|IN_ACCESS, rec=False)
+      self.mark = stat(self.path).st_ctime_ns
+      def wHandler():
+        st = stat(self.path).st_ctime_ns
+        if st != self.mark:
+          self.mark = st
+          self.handler(*self.args, **self.kwargs)
+        self.timer = thTimer(0.5, wHandler)
+        self.timer.start()
+      self.timer = thTimer(0.5, wHandler)
+      self.timer.start()
       self.status = True
-
-    def stop(self):                # Stop iNotify watching
+    
+    def stop(self):
       if not self.status:
         return
-      # Remove watch
-      self.watchMngr.rm_watch(self.watch[self.path])
-      # Stop timer
-      self.iNotifier.stop()
-      self.status = False
+      self.timer.cancel()
 
   class __DConfig(Config):                 # Redefined class for daemon config
 
@@ -182,7 +178,7 @@ class YDDaemon(object):         # Yandex.Disk daemon interface
     
     # Initialize watcher staff
     self.__watcher = self.__Watcher(pathJoin(expanduser(self.config['dir']), '.sync/cli.log'), 
-                               eventHandler, par=True)
+                               eventHandler, True)
     # Initialize timer staff
     self.__timer = thTimer(0.3, eventHandler, (False,))
     self.__timer.start()
