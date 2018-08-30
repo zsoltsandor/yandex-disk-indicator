@@ -32,11 +32,11 @@ from gi.repository import Notify
 require_version('GdkPixbuf', '2.0')
 from gi.repository.GdkPixbuf import Pixbuf
 require_version('GLib', '2.0')
-from gi.repository.GLib import timeout_add, source_remove, idle_add
+from gi.repository.GLib import timeout_add, source_remove, idle_add, unix_signal_add, PRIORITY_HIGH
 
 from webbrowser import open_new as openNewBrowser
 from logging import basicConfig, getLogger
-from signal import signal, SIGTERM
+from signal import signal, SIGTERM, SIGINT
 from gettext import translation
 from os import stat
 from os.path import exists as pathExists
@@ -699,8 +699,9 @@ if __name__ == '__main__':
   for d in daemons:
     indicators.append(Indicator(d, _('#%d ') % len(indicators) if len(daemons) > 1 else ''))
 
-  # Register the SIGTERM handler for graceful exit when indicator is killed
-  signal(SIGTERM, lambda _1, _2: appExit())
+  # Register the SIGINT/SIGTERM handler for graceful exit when indicator is killed
+  unix_signal_add(PRIORITY_HIGH, SIGINT, appExit)
+  unix_signal_add(PRIORITY_HIGH, SIGTERM, appExit)
 
   # Start GTK Main loop
   Gtk.main()
