@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #
 appName = 'yandex-disk-indicator'
-appVer = '1.10.4'
+appVer = '1.10.6'
 #
 from datetime import datetime
 COPYRIGHT = 'Copyright ' + '\u00a9' + ' 2013-' + str(datetime.today().year) + ' Sly_tom_cat'
@@ -261,7 +261,8 @@ class Indicator(YDDaemon):            # Yandex.Disk appIndicator
       # Update last synchronized sub-menu on first run or when last data has changed
       if vals['lastchg'] or vals['laststatus'] == 'unknown':
         # Update last synchronized sub-menu
-        self.lastItems = Gtk.Menu()                   # Create new Sub-menu:
+        self.lastItems.destroy()                      # Disable showing synchronized sub menu while updating it - temp fix for #197
+        self.lastItems = Gtk.Menu()                   # Create new/empty Sub-menu:
         for filePath in vals['lastitems']:            # Create new sub-menu items
           # Create menu label as file path (shorten it down to 50 symbols when path length > 50
           # symbols), with replaced underscore (to disable menu acceleration feature of GTK menu).
@@ -705,3 +706,4 @@ if __name__ == '__main__':
 
   # Start GTK Main loop
   Gtk.main()
+  
